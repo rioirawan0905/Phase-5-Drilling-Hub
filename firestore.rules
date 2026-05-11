@@ -1,0 +1,70 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Hardened Helpers ---
+    function isSignedIn() { return request.auth != null; }
+    function isVerified() { return isSignedIn(); } 
+    function isValidId(id) { return id is string && id.size() <= 128; } 
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    // Personnel Validation
+    function isValidPersonnel(data) {
+      return data.keys().hasAll(['fullName', 'title', 'email', 'rosterGroup']) &&
+             data.fullName is string &&
+             data.title is string;
+    }
+
+    // Scheduling Validation
+    function isValidScheduling(data) {
+      return data.keys().hasAll(['personnelId', 'startDate', 'endDate', 'status']) &&
+             isValidId(data.personnelId) &&
+             data.startDate is string &&
+             data.endDate is string;
+    }
+
+    // FlightRequest Validation
+    function isValidFlightRequest(data) {
+      return data.keys().hasAll(['personnelId', 'startDate', 'endDate', 'statusDZtoID', 'statusIDtoDZ', 'status']) &&
+             isValidId(data.personnelId) &&
+             data.startDate is string &&
+             data.endDate is string;
+    }
+
+    // Collaborators Validation
+    function isValidCollaborator(data) {
+      return data.keys().hasAll(['email', 'role', 'invitedBy', 'createdAt', 'status']) &&
+             data.email is string &&
+             data.role in ['admin', 'guest'] &&
+             data.status in ['pending', 'accepted'];
+    }
+
+    // --- Collection Routes ---
+
+    match /collaborators/{collabId} {
+      allow read: if isVerified();
+      allow create: if isVerified() && isValidCollaborator(incoming());
+      allow update, delete: if isVerified();
+    }
+
+    match /personnel/{personnelId} {
+      allow read: if true;
+      allow write: if isVerified();
+    }
+
+    match /schedules/{scheduleId} {
+      allow read: if true;
+      allow write: if isVerified();
+    }
+
+    match /flightRequests/{requestId} {
+      allow read: if true;
+      allow write: if isVerified();
+    }
+  }
+}

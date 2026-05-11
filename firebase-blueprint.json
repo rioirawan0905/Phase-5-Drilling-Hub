@@ -1,0 +1,60 @@
+{
+  "entities": {
+    "Personnel": {
+      "title": "Personnel",
+      "description": "Details of drilling personnel",
+      "type": "object",
+      "properties": {
+        "fullName": { "type": "string" },
+        "title": { "type": "string" },
+        "email": { "type": "string" },
+        "rosterGroup": { "type": "string" }
+      },
+      "required": ["fullName", "title", "email", "rosterGroup"]
+    },
+    "Scheduling": {
+      "title": "Scheduling",
+      "description": "On-duty/Off-duty schedule for personnel",
+      "type": "object",
+      "properties": {
+        "personnelId": { "type": "string" },
+        "startDate": { "type": "string" },
+        "endDate": { "type": "string" },
+        "status": { "type": "string", "enum": ["ON_DUTY", "OFF_DUTY", "TRANSIT"] }
+      },
+      "required": ["personnelId", "startDate", "endDate", "status"]
+    },
+    "FlightRequest": {
+      "title": "Flight Request",
+      "description": "Flight ticket requests for personnel with independent leg tracking",
+      "type": "object",
+      "properties": {
+        "personnelId": { "type": "string" },
+        "schedulingId": { "type": ["string", "null"] },
+        "startDate": { "type": "string" },
+        "endDate": { "type": "string" },
+        "requestedDateDZtoID": { "type": ["string", "null"] },
+        "requestedDateIDtoDZ": { "type": ["string", "null"] },
+        "statusDZtoID": { "type": "string", "enum": ["Requested", "Not Received", "Received", "Need Action", "Not Requested"] },
+        "statusIDtoDZ": { "type": "string", "enum": ["Requested", "Not Received", "Received", "Need Action", "Not Requested"] },
+        "status": { "type": "string" },
+        "createdAt": { "type": "object" }
+      },
+      "required": ["personnelId", "startDate", "endDate", "statusDZtoID", "statusIDtoDZ", "status"]
+    }
+  },
+  "firestore": {
+    "/personnel": {
+      "schema": "Personnel",
+      "description": "Collection of all personnel"
+    },
+    "/schedules": {
+      "schema": "Scheduling",
+      "description": "Personnel duty schedules"
+    },
+    "/flightRequests": {
+      "schema": "FlightRequest",
+      "description": "Flight booking requests"
+    }
+  }
+}

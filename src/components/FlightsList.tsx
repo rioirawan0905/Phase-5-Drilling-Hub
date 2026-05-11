@@ -1,0 +1,596 @@
+import { useState, useEffect, useMemo } from 'react';
+import { collection, query, onSnapshot, addDoc, serverTimestamp, getDocs, updateDoc, doc, Timestamp, deleteDoc } from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { Personnel, FlightRequest, Scheduling, FlightType, FlightStatus } from '../types';
+import { Plane, Calendar, Clock, Plus, Filter, ArrowUpRight, ArrowDownRight, CheckCircle2, AlertCircle, XCircle, Trash2, Pencil, ArrowRight, ArrowLeft } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { cn, formatDate } from '../lib/utils';
+import { ConfirmModal } from './ConfirmModal';
+
+const flightRequestSchema = z.object({
+  personnelIds: z.array(z.string()).min(1, 'At least one person must be selected'),
+  schedulingId: z.string().optional(),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+  requestedDateDZtoID: z.string().optional(),
+  requestedDateIDtoDZ: z.string().optional(),
+}).refine(data => data.requestedDateDZtoID || data.requestedDateIDtoDZ, {
+  message: "At least one ticket date must be specified",
+  path: ["requestedDateDZtoID"]
+});
+
+type FlightRequestFormData = z.infer<typeof flightRequestSchema>;
+
+const scheduleSchema = z.object({
+  personnelId: z.string().min(1, 'Personnel is required'),
+  startDate: z.string().min(1, 'Start date is required'),
+  endDate: z.string().min(1, 'End date is required'),
+  status: z.enum(['ON_DUTY', 'OFF_DUTY', 'TRANSIT'] as const),
+});
+
+type ScheduleFormData = z.infer<typeof scheduleSchema>;
+
+interface FlightsListProps {
+  isGuest?: boolean;
+}
+
+export function FlightsList({ isGuest }: FlightsListProps) {
+  const [personnel, setPersonnel] = useState<Personnel[]>([]);
+  const [flights, setFlights] = useState<FlightRequest[]>([]);
+  const [schedules, setSchedules] = useState<Scheduling[]>([]);
+  const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
+  const [editingFlight, setEditingFlight] = useState<FlightRequest | null>(null);
+  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
+  // Filters State
+  const [filterMonth, setFilterMonth] = useState<string>('ALL');
+  const [filterYear, setFilterYear] = useState<string>(new Date().getFullYear().toString());
+  const [filterGroup, setFilterGroup] = useState<string>('ALL');
+  const [filterPersonnel, setFilterPersonnel] = useState<string>('ALL');
+
+  const { register: regRequest, handleSubmit: handleReqSubmit, reset: resetReq, setValue: setReqValue, watch: watchReq, formState: { errors: reqErrors } } = useForm<FlightRequestFormData>({
+    resolver: zodResolver(flightRequestSchema),
+    defaultValues: { personnelIds: [] }
+  });
+
+  const selectedPersonnelIds = watchReq('personnelIds') || [];
+
+  const { register: regSched, handleSubmit: handleSchedSubmit, reset: resetSched, formState: { errors: schedErrors } } = useForm<ScheduleFormData>({
+    resolver: zodResolver(scheduleSchema),
+    defaultValues: { status: 'ON_DUTY' }
+  });
+
+  useEffect(() => {
+    const unsubPersonnel = onSnapshot(collection(db, 'personnel'), (snap) => {
+      setPersonnel(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Personnel)));
+    });
+
+    const unsubFlights = onSnapshot(collection(db, 'flightRequests'), (snap) => {
+      setFlights(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as FlightRequest)));
+    });
+
+    const unsubSchedules = onSnapshot(collection(db, 'schedules'), (snap) => {
+      setSchedules(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Scheduling)));
+    });
+
+    return () => {
+      unsubPersonnel();
+      unsubFlights();
+      unsubSchedules();
+    };
+  }, []);
+
+  const onCreateRequest = async (data: FlightRequestFormData) => {
+    try {
+      const selectedSchedule = schedules.find(s => s.id === data.schedulingId);
+      const finalStartDate = selectedSchedule?.startDate || data.startDate || '';
+      const finalEndDate = selectedSchedule?.endDate || data.endDate || '';
+
+      const promises = data.personnelIds.map(pid => {
+        const baseData = {
+          personnelId: pid,
+          schedulingId: data.schedulingId || null,
+          startDate: finalStartDate,
+          endDate: finalEndDate,
+          requestedDateDZtoID: data.requestedDateDZtoID || null,
+          requestedDateIDtoDZ: data.requestedDateIDtoDZ || null,
+          statusDZtoID: data.requestedDateDZtoID ? 'Requested' : 'Not Requested',
+          statusIDtoDZ: data.requestedDateIDtoDZ ? 'Requested' : 'Not Requested',
+          status: 'Requested', // Aggregate for legacy
+          createdAt: serverTimestamp()
+        };
+
+        if (editingFlight) {
+          return updateDoc(doc(db, 'flightRequests', editingFlight.id), baseData);
+        } else {
+          return addDoc(collection(db, 'flightRequests'), baseData);
+        }
+      });
+
+      await Promise.all(promises);
+      handleCloseRequestModal();
+    } catch (error) {
+      handleFirestoreError(error, editingFlight ? OperationType.UPDATE : OperationType.CREATE, editingFlight ? `flightRequests/${editingFlight.id}` : 'flightRequests');
+    }
+  };
+
+  const handleEditFlight = (f: FlightRequest) => {
+    setEditingFlight(f);
+    setReqValue('personnelIds', [f.personnelId]);
+    setReqValue('schedulingId', f.schedulingId || '');
+    setReqValue('startDate', f.startDate || '');
+    setReqValue('endDate', f.endDate || '');
+    setReqValue('requestedDateDZtoID', f.requestedDateDZtoID || '');
+    setReqValue('requestedDateIDtoDZ', f.requestedDateIDtoDZ || '');
+    setIsRequestModalOpen(true);
+  };
+
+  const handleCloseRequestModal = () => {
+    setIsRequestModalOpen(false);
+    setEditingFlight(null);
+    resetReq();
+  };
+
+  const onCreateSchedule = async (data: ScheduleFormData) => {
+    try {
+      await addDoc(collection(db, 'schedules'), data);
+      setIsScheduleModalOpen(false);
+      resetSched();
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'schedules');
+    }
+  };
+
+  const getStatusStyle = (status: FlightStatus, requestedDate?: string | null) => {
+    if (status === 'Received') return "bg-emerald-500/20 text-emerald-400 border-emerald-500/30";
+    
+    // Explicit or Auto "Need Action" logic
+    let isUrgent = status === 'Need Action';
+    if (requestedDate) {
+      const flightDate = new Date(requestedDate);
+      const today = new Date();
+      const diffTime = flightDate.getTime() - today.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      if (diffDays <= 14) isUrgent = true;
+    }
+
+    if (isUrgent) {
+      return "bg-rose-500/20 text-rose-500 border-rose-500/30 animate-pulse font-bold px-2 py-0.5 rounded";
+    }
+
+    if (status === 'Not Requested') return "bg-slate-500/10 text-slate-500 border-white/5 px-2 py-0.5 rounded";
+    return "bg-blue-500/20 text-blue-400 border-blue-500/30 font-bold px-2 py-0.5 rounded text-center min-w-[70px]";
+  };
+
+  const getStatusLabel = (status: FlightStatus, requestedDate?: string | null) => {
+    if (status === 'Received') return "Received";
+    
+    if (requestedDate) {
+      const flightDate = new Date(requestedDate);
+      const today = new Date();
+      const diffTime = flightDate.getTime() - today.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (diffDays <= 14) return "Need Action";
+    }
+
+    if (status === 'Not Requested') return "Pending";
+    return status;
+  };
+
+  const updateTransitStatus = async (id: string, leg: 'DZtoID' | 'IDtoDZ', status: FlightStatus) => {
+    try {
+      const field = leg === 'DZtoID' ? 'statusDZtoID' : 'statusIDtoDZ';
+      await updateDoc(doc(db, 'flightRequests', id), { [field]: status });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `flightRequests/${id}`);
+    }
+  };
+
+  const handleDeleteRequest = async () => {
+    if (!deleteConfirmId) return;
+    try {
+      await deleteDoc(doc(db, 'flightRequests', deleteConfirmId));
+      setDeleteConfirmId(null);
+    } catch (error) {
+       handleFirestoreError(error, OperationType.DELETE, `flightRequests/${deleteConfirmId}`);
+    }
+  };
+
+  const filteredFlights = useMemo(() => {
+    return flights.filter(f => {
+      const person = personnel.find(p => p.id === f.personnelId);
+      
+      // Personnel filter
+      if (filterPersonnel !== 'ALL' && f.personnelId !== filterPersonnel) return false;
+      
+      // Group filter
+      if (filterGroup !== 'ALL' && person?.rosterGroup !== filterGroup) return false;
+      
+      // Year filter (checking duty period and flight dates)
+      const flightDates = [f.startDate, f.endDate, f.requestedDateDZtoID, f.requestedDateIDtoDZ].filter(Boolean) as string[];
+      if (filterYear !== 'ALL') {
+        const hasYear = flightDates.some(d => d.startsWith(filterYear));
+        if (!hasYear) return false;
+      }
+      
+      // Month filter
+      if (filterMonth !== 'ALL') {
+        const monthNum = parseInt(filterMonth);
+        const hasMonth = flightDates.some(d => {
+          if (!d) return false;
+          // Simple string check is usually enough if format is YYYY-MM-DD
+          return d.split('-')[1] === filterMonth.padStart(2, '0');
+        });
+        if (!hasMonth) return false;
+      }
+      
+      return true;
+    });
+  }, [flights, personnel, filterMonth, filterYear, filterGroup, filterPersonnel]);
+
+  const uniqueGroups = useMemo(() => {
+    const groups = new Set(personnel.map(p => p.rosterGroup).filter(Boolean));
+    return Array.from(groups).sort();
+  }, [personnel]);
+
+  return (
+    <div className="space-y-6 pb-20">
+      {/* View Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-2">
+        <div>
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-white">Flight Ticket Request</h2>
+          <p className="text-[10px] text-slate-500 uppercase tracking-widest mt-0.5">Manifest Terminal</p>
+        </div>
+        
+        <div className="flex items-center gap-3">
+          {!isGuest && (
+            <button 
+              onClick={() => setIsRequestModalOpen(true)}
+              className="btn-primary"
+            >
+              New Flight Request
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Filters Bar */}
+      <div className="flex flex-wrap items-center gap-4 p-4 bg-black/20 border border-white/5 rounded-xl">
+        <div className="flex items-center gap-2">
+          <Filter size={14} className="text-slate-500" />
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Filters:</span>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 flex-1">
+          <div className="space-y-1">
+            <label className="text-[9px] text-slate-500 uppercase font-bold px-1">Month</label>
+            <select 
+              value={filterMonth}
+              onChange={(e) => setFilterMonth(e.target.value)}
+              className="w-full bg-[#111114] border border-white/5 px-3 py-1.5 text-[10px] text-slate-300 rounded-lg focus:outline-none"
+            >
+              <option value="ALL">ALL MONTHS</option>
+              {[
+                { v: '01', l: 'JANUARY' }, { v: '02', l: 'FEBRUARY' }, { v: '03', l: 'MARCH' },
+                { v: '04', l: 'APRIL' }, { v: '05', l: 'MAY' }, { v: '06', l: 'JUNE' },
+                { v: '07', l: 'JULY' }, { v: '08', l: 'AUGUST' }, { v: '09', l: 'SEPTEMBER' },
+                { v: '10', l: 'OCTOBER' }, { v: '11', l: 'NOVEMBER' }, { v: '12', l: 'DECEMBER' }
+              ].map(m => (
+                <option key={m.v} value={m.v}>{m.l}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[9px] text-slate-500 uppercase font-bold px-1">Year</label>
+            <select 
+              value={filterYear}
+              onChange={(e) => setFilterYear(e.target.value)}
+              className="w-full bg-[#111114] border border-white/5 px-3 py-1.5 text-[10px] text-slate-300 rounded-lg focus:outline-none"
+            >
+              <option value="ALL">ALL YEARS</option>
+              <option value="2024">2024</option>
+              <option value="2025">2025</option>
+              <option value="2026">2026</option>
+            </select>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[9px] text-slate-500 uppercase font-bold px-1">Group</label>
+            <select 
+              value={filterGroup}
+              onChange={(e) => setFilterGroup(e.target.value)}
+              className="w-full bg-[#111114] border border-white/5 px-3 py-1.5 text-[10px] text-slate-300 rounded-lg focus:outline-none"
+            >
+              <option value="ALL">ALL GROUPS</option>
+              {uniqueGroups.map(g => (
+                <option key={g} value={g}>GROUP {g}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[9px] text-slate-500 uppercase font-bold px-1">Personnel</label>
+            <select 
+              value={filterPersonnel}
+              onChange={(e) => setFilterPersonnel(e.target.value)}
+              className="w-full bg-[#111114] border border-white/5 px-3 py-1.5 text-[10px] text-slate-300 rounded-lg focus:outline-none"
+            >
+              <option value="ALL">ALL PERSONNEL</option>
+              {personnel.sort((a,b) => a.fullName.localeCompare(b.fullName)).map(p => (
+                <option key={p.id} value={p.id}>{p.fullName}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Flight Manifest Theme Container */}
+      <div className="theme-container overflow-hidden">
+        <div className="overflow-x-auto custom-scrollbar">
+          <table className="w-full text-left min-w-[800px] md:min-w-0">
+          <thead className="text-[10px] text-slate-500 uppercase tracking-widest bg-black/20">
+            <tr>
+              <th className="py-3 px-6 font-normal">Personnel</th>
+              <th className="py-3 px-6 font-normal">Duty Period</th>
+              <th className="py-3 px-6 font-normal">Transit Route</th>
+              <th className="py-3 px-6 font-normal">Status</th>
+              <th className="py-3 px-6 font-normal text-right">Control</th>
+            </tr>
+          </thead>
+          <tbody className="text-xs divide-y divide-white/5">
+            {filteredFlights.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="py-20 text-center text-[10px] uppercase font-mono text-slate-700 tracking-widest">
+                  No active requests in system
+                </td>
+              </tr>
+            ) : (
+              filteredFlights.sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)).map((f) => {
+                const person = personnel.find(p => p.id === f.personnelId);
+                return (
+                  <tr key={f.id} className="hover:bg-white/[0.02] transition-colors group border-b border-white/5">
+                    <td className="py-4 px-6">
+                      <p className="font-semibold text-white">{person?.fullName || 'UNKNOWN'}</p>
+                      <p className="text-[10px] text-slate-500 font-mono italic">{person?.title || 'No Title'}</p>
+                    </td>
+                    <td className="py-4 px-6 text-slate-400 font-mono">
+                      {f.startDate ? `${f.startDate} — ${f.endDate}` : 'N/A'}
+                    </td>
+                    <td className="py-4 px-6" colSpan={3}>
+                      <div className="space-y-4">
+                        {f.requestedDateDZtoID && (
+                          <div className="flex items-center justify-between p-2 rounded bg-blue-500/5 border border-blue-500/10">
+                            <div className="flex items-center gap-3">
+                              <ArrowRight size={12} className="text-blue-400" />
+                              <div>
+                                <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Algeria → Indonesia</p>
+                                <p className="text-[11px] text-white font-mono">{f.requestedDateDZtoID}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-4">
+                              <span className={cn(
+                                "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter border",
+                                getStatusStyle(f.statusDZtoID || 'Requested', f.requestedDateDZtoID)
+                              )}>
+                                {getStatusLabel(f.statusDZtoID || 'Requested', f.requestedDateDZtoID)}
+                              </span>
+                              {!isGuest ? (
+                                <select 
+                                  onChange={(e) => updateTransitStatus(f.id, 'DZtoID', e.target.value as FlightStatus)}
+                                  value={f.statusDZtoID || 'Requested'}
+                                  className="bg-black/40 border border-white/5 text-[9px] text-slate-400 px-2 py-1 rounded focus:outline-none focus:border-blue-500/30 font-bold uppercase"
+                                >
+                                  <option value="Not Requested">Not Requested</option>
+                                  <option value="Requested">Requested</option>
+                                  <option value="Received">Received</option>
+                                </select>
+                              ) : (
+                                <span className="text-[9px] text-slate-500 font-bold uppercase">Locked</span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                        {f.requestedDateIDtoDZ && (
+                          <div className="flex items-center justify-between p-2 rounded bg-emerald-500/5 border border-emerald-500/10">
+                            <div className="flex items-center gap-3">
+                              <ArrowLeft size={12} className="text-emerald-400" />
+                              <div>
+                                <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Indonesia → Algeria</p>
+                                <p className="text-[11px] text-white font-mono">{f.requestedDateIDtoDZ}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-4">
+                              <span className={cn(
+                                "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter border",
+                                getStatusStyle(f.statusIDtoDZ || 'Requested', f.requestedDateIDtoDZ)
+                              )}>
+                                {getStatusLabel(f.statusIDtoDZ || 'Requested', f.requestedDateIDtoDZ)}
+                              </span>
+                              {!isGuest ? (
+                                <select 
+                                  onChange={(e) => updateTransitStatus(f.id, 'IDtoDZ', e.target.value as FlightStatus)}
+                                  value={f.statusIDtoDZ || 'Requested'}
+                                  className="bg-black/40 border border-white/5 text-[9px] text-slate-400 px-2 py-1 rounded focus:outline-none focus:border-emerald-500/30 font-bold uppercase"
+                                >
+                                  <option value="Not Requested">Not Requested</option>
+                                  <option value="Requested">Requested</option>
+                                  <option value="Received">Received</option>
+                                </select>
+                              ) : (
+                                <span className="text-[9px] text-slate-500 font-bold uppercase">Locked</span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      {!isGuest && (
+                        <div className="flex justify-end gap-3 pt-3">
+                           <button onClick={() => handleEditFlight(f)} className="p-1 px-2 text-[10px] font-bold text-slate-500 hover:text-white uppercase flex items-center gap-1 border border-white/5 rounded"><Pencil size={12} /> Edit</button>
+                           <button onClick={() => setDeleteConfirmId(f.id)} className="p-1 px-2 text-[10px] font-bold text-slate-500 hover:text-rose-500 uppercase flex items-center gap-1 border border-white/5 rounded"><Trash2 size={12} /> Delete</button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {/* Modals with Dark Aesthetics */}
+      <AnimatePresence>
+        {isRequestModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={handleCloseRequestModal} className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative w-full max-w-lg bg-[#111114] border border-white/10 p-8 rounded-2xl shadow-2xl">
+              <h3 className="text-lg font-bold text-white uppercase tracking-tight mb-6">
+                {editingFlight ? 'Edit Flight Request' : 'Flight Ticket Request'}
+              </h3>
+              <form onSubmit={handleReqSubmit(onCreateRequest)} className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-500 uppercase font-bold px-1">Personnel Selection (Multiple Allowed)</label>
+                  <div className="flex flex-wrap gap-2 p-3 bg-[#16161a] border border-white/5 rounded-lg min-h-[100px]">
+                    {personnel.map(p => {
+                      const isSelected = selectedPersonnelIds.includes(p.id);
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => {
+                            const current = selectedPersonnelIds;
+                            if (isSelected) {
+                              setReqValue('personnelIds', current.filter(id => id !== p.id));
+                            } else {
+                              setReqValue('personnelIds', [...current, p.id]);
+                            }
+                          }}
+                          className={cn(
+                            "px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all border",
+                            isSelected 
+                              ? "bg-blue-500/20 border-blue-500 text-blue-400" 
+                              : "bg-black/20 border-white/5 text-slate-500 hover:border-white/20"
+                          )}
+                        >
+                          {p.fullName}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {reqErrors.personnelIds && <p className="text-[10px] text-rose-500 px-1">{reqErrors.personnelIds.message}</p>}
+                </div>
+
+                <div className="space-y-4 p-4 rounded-xl bg-black/40 border border-white/5">
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-slate-500 uppercase font-bold px-1">Link to Duty Period (From Roster)</label>
+                    <select 
+                      {...regRequest('schedulingId')} 
+                      className="w-full bg-[#16161a] border border-white/5 px-4 py-2.5 text-sm text-slate-300 rounded-lg focus:outline-none"
+                      onChange={(e) => {
+                        const sched = schedules.find(s => s.id === e.target.value);
+                        if (sched) {
+                          setReqValue('startDate', sched.startDate);
+                          setReqValue('endDate', sched.endDate);
+                        }
+                      }}
+                    >
+                      <option value="">Manual Entry or Select Period...</option>
+                      {selectedPersonnelIds.length === 1 && schedules.filter(s => s.personnelId === selectedPersonnelIds[0]).map(s => (
+                        <option key={s.id} value={s.id}>{s.startDate} to {s.endDate} ({s.status})</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-slate-500 uppercase font-bold px-1">Duty Start Date</label>
+                      <input type="date" {...regRequest('startDate')} className="w-full bg-[#16161a] border border-white/5 px-4 py-2.5 text-sm text-slate-300 rounded-lg focus:outline-none" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-slate-500 uppercase font-bold px-1">Duty End Date</label>
+                      <input type="date" {...regRequest('endDate')} className="w-full bg-[#16161a] border border-white/5 px-4 py-2.5 text-sm text-slate-300 rounded-lg focus:outline-none" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-slate-500 uppercase font-bold px-1">Ticket: DZ → ID</label>
+                    <input type="date" {...regRequest('requestedDateDZtoID')} className="w-full bg-[#16161a] border border-white/5 px-4 py-2.5 text-sm text-slate-300 rounded-lg focus:outline-none focus:border-blue-500/30" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-slate-500 uppercase font-bold px-1">Ticket: ID → DZ</label>
+                    <input type="date" {...regRequest('requestedDateIDtoDZ')} className="w-full bg-[#16161a] border border-white/5 px-4 py-2.5 text-sm text-slate-300 rounded-lg focus:outline-none focus:border-emerald-500/30" />
+                  </div>
+                </div>
+                {reqErrors.requestedDateDZtoID && <p className="text-[10px] text-rose-500 px-1">{reqErrors.requestedDateDZtoID.message}</p>}
+
+                <div className="flex justify-end gap-3 pt-6">
+                  <button type="button" onClick={handleCloseRequestModal} className="px-5 py-2 text-[11px] font-bold text-slate-500 hover:text-white uppercase transition-colors">Discard</button>
+                  <button type="submit" className="btn-primary">
+                    {editingFlight ? 'Update Request' : 'Submit Flight Request'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+        {isScheduleModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsScheduleModalOpen(false)} className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative w-full max-w-lg bg-[#111114] border border-white/10 p-8 rounded-2xl shadow-2xl">
+              <h3 className="text-lg font-bold text-white uppercase tracking-tight mb-6">Duty Assignment</h3>
+              <form onSubmit={handleSchedSubmit(onCreateSchedule)} className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-500 uppercase font-bold px-1">Staff Member</label>
+                  <select {...regSched('personnelId')} className="w-full bg-[#16161a] border border-white/5 px-4 py-2.5 text-sm text-slate-300 rounded-lg focus:outline-none focus:border-blue-500/30">
+                    <option value="">Select Personnel...</option>
+                    {personnel.map(p => <option key={p.id} value={p.id}>{p.fullName} ({p.employeeId})</option>)}
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-slate-500 uppercase font-bold px-1">Commence</label>
+                    <input type="date" {...regSched('startDate')} className="w-full bg-[#16161a] border border-white/5 px-4 py-2 text-sm text-slate-300 rounded-lg" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-slate-500 uppercase font-bold px-1">Conclude</label>
+                    <input type="date" {...regSched('endDate')} className="w-full bg-[#16161a] border border-white/5 px-4 py-2 text-sm text-slate-300 rounded-lg" />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-500 uppercase font-bold px-1">Assignment Type</label>
+                  <select {...regSched('status')} className="w-full bg-[#16161a] border border-white/5 px-4 py-2.5 text-sm text-slate-300 rounded-lg focus:outline-none">
+                    <option value="ON_DUTY">ON DUTY</option>
+                    <option value="OFF_DUTY">OFF DUTY</option>
+                    <option value="TRANSIT">IN TRANSIT</option>
+                  </select>
+                </div>
+                <div className="flex justify-end gap-3 pt-6">
+                  <button type="button" onClick={() => setIsScheduleModalOpen(false)} className="px-5 py-2 text-[11px] font-bold text-slate-500 hover:text-white uppercase">Cancel</button>
+                  <button type="submit" className="btn-primary">Deploy</button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <ConfirmModal 
+        isOpen={!!deleteConfirmId}
+        onClose={() => setDeleteConfirmId(null)}
+        onConfirm={handleDeleteRequest}
+        title="Purge Transit Record"
+        message="This operation will remove the flight request from the secure manifest database. This action is irreversible."
+        confirmText="Confirm Purge"
+      />
+    </div>
+  );
+}

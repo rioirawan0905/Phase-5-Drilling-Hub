@@ -1,0 +1,6 @@
+{
+  "name": "Phase 5 Personnel & Flight Control",
+  "description": "A specialized personnel management and flight request tracking system for Drilling Phase 5 operations, featuring automated on-duty scheduling and status monitoring.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
