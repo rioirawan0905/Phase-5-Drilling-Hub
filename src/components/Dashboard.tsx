@@ -44,6 +44,7 @@ export function Dashboard({ isGuest }: DashboardProps) {
   const [selectedPeriods, setSelectedPeriods] = useState<string[]>([]); // YYYY-MM
   const [selectedGroup, setSelectedGroup] = useState<string>('ALL');
   const [selectedPersonnel, setSelectedPersonnel] = useState<string>('ALL');
+  const [isPeriodMenuOpen, setIsPeriodMenuOpen] = useState(false);
   
   // Summary Table Filters
   const [summaryGroup, setSummaryGroup] = useState<string>('ALL');
@@ -297,15 +298,25 @@ export function Dashboard({ isGuest }: DashboardProps) {
 
   // --- NEW LABOR ANALYTICS ENGINE ---
   const laborAnalytics = useMemo(() => {
-    // 1. Filter schedules to ON_DUTY only
-    let activeDutySchedules = schedules.filter(s => {
-      const status = (s.status || '').toString().toUpperCase();
-      return status === 'ON_DUTY' || status === 'ON-DUTY'; // Handle both formats
+    // 1. Filter personnel by current active filters
+    const filteredPersonnel = personnel.filter(p => {
+      const matchesGroup = selectedGroup === 'ALL' || p.rosterGroup === selectedGroup;
+      const matchesPerson = selectedPersonnel === 'ALL' || p.id === selectedPersonnel;
+      return matchesGroup && matchesPerson;
     });
 
-    // 2. Filter by period if any selected
+    const filteredPersonnelIds = new Set(filteredPersonnel.map(p => p.id));
+
+    // 2. Filter schedules: must be ON_DUTY, belong to filtered personnel, and match selected period
+    let targetSchedules = schedules.filter(s => {
+      const status = (s.status || '').toString().toUpperCase();
+      const isOnDuty = status === 'ON_DUTY' || status === 'ON-DUTY';
+      return isOnDuty && filteredPersonnelIds.has(s.personnelId);
+    });
+
+    // 3. Filter by period if any selected
     if (selectedPeriods.length > 0) {
-      activeDutySchedules = activeDutySchedules.filter(s => {
+      targetSchedules = targetSchedules.filter(s => {
         const start = toDate(s.startDate);
         const end = toDate(s.endDate);
         if (!start || !end || isNaN(start.getTime())) return false;
@@ -313,16 +324,16 @@ export function Dashboard({ isGuest }: DashboardProps) {
         const sMonth = start.toISOString().substring(0, 7);
         const eMonth = end.toISOString().substring(0, 7);
         
-        // Match if selected month is within schedule range
+        // Match if any selected month is within schedule range
         return selectedPeriods.some(p => p >= sMonth && p <= eMonth);
       });
     }
 
-    // 3. Aggregate hours
+    // 4. Aggregate hours
     const hoursPerPerson: Record<string, number> = {};
     let totalHoursCount = 0;
 
-    activeDutySchedules.forEach(s => {
+    targetSchedules.forEach(s => {
       const start = toDate(s.startDate);
       const end = toDate(s.endDate);
       if (!start || !end) return;
@@ -337,20 +348,15 @@ export function Dashboard({ isGuest }: DashboardProps) {
       totalHoursCount += hours;
     });
 
-    // 4. Construct chart data
-    const chartData = personnel
-      .filter(p => {
-        const matchesGroup = selectedGroup === 'ALL' || p.rosterGroup === selectedGroup;
-        const matchesPerson = selectedPersonnel === 'ALL' || p.id === selectedPersonnel;
-        const hasHours = (hoursPerPerson[p.id] || 0) > 0;
-        return matchesGroup && matchesPerson && hasHours;
-      })
+    // 5. Construct chart data
+    const chartData = filteredPersonnel
       .map(p => ({
         id: p.id,
         name: p.fullName || 'Unknown',
         hours: hoursPerPerson[p.id] || 0,
         group: p.rosterGroup || 'A'
       }))
+      .filter(item => item.hours > 0)
       .sort((a, b) => b.hours - a.hours);
 
     return { totalHours: totalHoursCount, chartData };
@@ -800,42 +806,78 @@ export function Dashboard({ isGuest }: DashboardProps) {
                 </div>
 
                 {/* Period Selector */}
-                <div className="relative group/period">
-                  <button className="flex items-center gap-2 px-3 py-1.5 bg-white/[0.03] border border-white/10 rounded-lg hover:bg-white/[0.05] transition-all">
-                    <Calendar size={12} className="text-slate-400" />
-                    <span className="text-[10px] font-black text-white uppercase tracking-widest">
-                      {selectedPeriods.length === 0 ? 'LIFETIME' : `${selectedPeriods.length} MONTHS`}
+                <div className="relative">
+                  <button 
+                    onClick={() => setIsPeriodMenuOpen(!isPeriodMenuOpen)}
+                    className={cn(
+                      "flex items-center gap-2 px-3 py-1.5 bg-white/[0.03] border border-white/10 rounded-lg hover:bg-white/[0.05] transition-all",
+                      isPeriodMenuOpen && "border-blue-500/50 bg-blue-500/5"
+                    )}
+                  >
+                    <Calendar size={12} className={cn("transition-colors", isPeriodMenuOpen ? "text-blue-400" : "text-slate-400")} />
+                    <span className="text-[10px] font-black text-white uppercase tracking-widest min-w-[60px] text-left">
+                      {selectedPeriods.length === 0 ? 'LIFETIME' : 
+                       selectedPeriods.length === 1 ? formatPeriod(selectedPeriods[0]) :
+                       `${selectedPeriods.length} MONTHS`}
                     </span>
                   </button>
-                  <div className="absolute top-full right-0 mt-2 w-48 bg-[#0d0d0f] border border-white/10 rounded-xl shadow-2xl opacity-0 translate-y-2 pointer-events-none group-hover/period:opacity-100 group-hover/period:translate-y-0 group-hover/period:pointer-events-auto transition-all z-50 overflow-hidden">
-                    <div className="p-2 border-b border-white/5 bg-white/[0.02]">
-                      <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest px-2">Select Active Periods</p>
-                    </div>
-                    <div className="max-h-60 overflow-y-auto custom-scrollbar">
+                  
+                  {isPeriodMenuOpen && (
+                    <>
+                      {/* Invisible backdrop for click-away */}
                       <div 
-                        onClick={() => setSelectedPeriods([])}
-                        className={cn(
-                          "px-4 py-2 text-[10px] font-bold uppercase cursor-pointer transition-colors hover:bg-white/5",
-                          selectedPeriods.length === 0 ? "text-blue-500 bg-blue-500/5" : "text-slate-400"
-                        )}
-                      >
-                        Reset All
-                      </div>
-                      {availableMonths.map(m => (
-                        <div 
-                          key={m}
-                          onClick={() => togglePeriod(m)}
-                          className={cn(
-                            "px-4 py-2 text-[10px] font-bold uppercase cursor-pointer flex justify-between items-center hover:bg-white/5 transition-colors",
-                            selectedPeriods.includes(m) ? "text-blue-500 bg-blue-500/5 text-shadow-glow" : "text-slate-400"
-                          )}
-                        >
-                          {formatPeriod(m)}
-                          {selectedPeriods.includes(m) && <CheckCircle2 size={10} className="text-blue-500" />}
+                        className="fixed inset-0 z-40" 
+                        onClick={() => setIsPeriodMenuOpen(false)} 
+                      />
+                      
+                      <div className="absolute top-full right-0 mt-2 w-52 bg-[#0d0d0f] border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in duration-200">
+                        <div className="p-2 border-b border-white/5 bg-white/[0.02]">
+                          <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest px-2">Select Active Periods</p>
                         </div>
-                      ))}
-                    </div>
-                  </div>
+                        <div className="max-h-60 overflow-y-auto custom-scrollbar">
+                          <div 
+                            onClick={() => {
+                              setSelectedPeriods([]);
+                              setIsPeriodMenuOpen(false); // Close on lifetime selection as it's a "reset"
+                            }}
+                            className={cn(
+                              "px-4 py-2 text-[10px] font-bold uppercase cursor-pointer transition-colors hover:bg-white/5 flex items-center gap-3",
+                              selectedPeriods.length === 0 ? "text-blue-500 bg-blue-500/5" : "text-slate-400"
+                            )}
+                          >
+                            <div className={cn(
+                              "w-3 h-3 rounded border flex items-center justify-center transition-colors",
+                              selectedPeriods.length === 0 ? "border-blue-500 bg-blue-500" : "border-white/10"
+                            )}>
+                              {selectedPeriods.length === 0 && <CheckCircle2 size={8} className="text-white" />}
+                            </div>
+                            Reset All (Lifetime)
+                          </div>
+                          {availableMonths.map(m => {
+                            const isSelected = selectedPeriods.includes(m);
+                            return (
+                              <div 
+                                key={m}
+                                onClick={() => togglePeriod(m)}
+                                className={cn(
+                                  "px-4 py-2 text-[10px] font-bold uppercase cursor-pointer flex items-center gap-3 hover:bg-white/5 transition-colors",
+                                  isSelected ? "text-blue-500 bg-blue-500/5" : "text-slate-400"
+                                )}
+                              >
+                                <div className={cn(
+                                  "w-3 h-3 rounded border flex items-center justify-center transition-colors",
+                                  isSelected ? "border-blue-500 bg-blue-500" : "border-white/10"
+                                )}>
+                                  {isSelected && <CheckCircle2 size={8} className="text-white" />}
+                                </div>
+                                {formatPeriod(m)}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
