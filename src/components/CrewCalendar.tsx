@@ -773,18 +773,29 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
             </div>
             {!isGuest && (
               <div className="flex gap-2">
-                <button 
-                  onClick={() => handleOpenAdd()}
-                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-3 md:px-4 py-2 rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-[0.1em] transition-all shadow-lg shadow-blue-900/40"
-                >
-                  <Plus size={14} /> <span className="hidden xs:inline">Add Duty</span>
-                </button>
-                <button 
-                  onClick={() => handleOpenAddEvent()}
-                  className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-3 md:px-4 py-2 rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-[0.1em] transition-all shadow-lg shadow-emerald-900/40"
-                >
-                  <Tag size={12} /> <span className="hidden xs:inline">Add Event</span>
-                </button>
+                <div className="relative group/add">
+                  <button 
+                    onClick={() => handleOpenAdd()}
+                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-3 md:px-4 py-2 rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-[0.1em] transition-all shadow-lg shadow-blue-900/40"
+                  >
+                    <Plus size={14} /> <span>Assign Duty Period</span>
+                  </button>
+                  <div className="absolute top-full right-0 mt-2 px-3 py-1.5 bg-black/90 border border-white/10 rounded-lg text-[8px] text-slate-300 uppercase font-bold tracking-widest invisible group-hover/add:visible z-50 whitespace-nowrap shadow-2xl backdrop-blur-sm">
+                    Assign ON_DUTY, TRANSIT, or OFF_DUTY periods to crew
+                  </div>
+                </div>
+
+                <div className="relative group/event-btn">
+                  <button 
+                    onClick={() => handleOpenAddEvent()}
+                    className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-3 md:px-4 py-2 rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-[0.1em] transition-all shadow-lg shadow-emerald-900/40"
+                  >
+                    <Tag size={12} /> <span>Add Event</span>
+                  </button>
+                  <div className="absolute top-full right-0 mt-2 px-3 py-1.5 bg-black/90 border border-white/10 rounded-lg text-[8px] text-slate-300 uppercase font-bold tracking-widest invisible group-hover/event-btn:visible z-50 whitespace-nowrap shadow-2xl backdrop-blur-sm">
+                    Create hub-wide events, meetings, or holidays
+                  </div>
+                </div>
               </div>
             )}
           </div>

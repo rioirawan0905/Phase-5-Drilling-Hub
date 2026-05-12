@@ -41,11 +41,12 @@ export function Layout({ children, user, isGuest, activeTab, onTabChange, onLogo
                 key={item.id}
                 onClick={() => onTabChange(item.id)}
                 className={cn(
-                  "transition-colors",
+                  "transition-colors flex items-center gap-2",
                   activeTab === item.id ? "text-blue-400" : "text-slate-500 hover:text-white"
                 )}
               >
-                {item.label}
+                <item.icon size={14} className={cn("transition-colors", activeTab === item.id ? "text-blue-400" : "text-slate-500")} />
+                <span>{item.label}</span>
               </button>
             ))}
           </nav>

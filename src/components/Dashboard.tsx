@@ -55,12 +55,12 @@ export function Dashboard({ isGuest }: DashboardProps) {
   // Helper for weather icons
   const getWeatherIcon = (desc: string = '') => {
     const d = desc.toLowerCase();
+    if (d.includes('thunder') || d.includes('lightning') || d.includes('storm')) return <CloudLightning size={12} className="text-yellow-400" />;
+    if (d.includes('rain') || d.includes('shower') || d.includes('drizzle')) return <CloudRain size={12} className="text-blue-400" />;
+    if (d.includes('snow') || d.includes('ice') || d.includes('hail')) return <CloudSnow size={12} className="text-white" />;
+    if (d.includes('fog') || d.includes('mist') || d.includes('haze') || d.includes('smoke')) return <CloudFog size={12} className="text-slate-400" />;
+    if (d.includes('cloud') || d.includes('overcast')) return <Cloud size={12} className="text-slate-300" />;
     if (d.includes('sun') || d.includes('clear')) return <Sun size={12} className="text-amber-400" />;
-    if (d.includes('lightning') || d.includes('thunder')) return <CloudLightning size={12} className="text-yellow-400" />;
-    if (d.includes('rain') || d.includes('shower')) return <CloudRain size={12} className="text-blue-400" />;
-    if (d.includes('drizzle')) return <CloudDrizzle size={12} className="text-blue-300" />;
-    if (d.includes('snow')) return <CloudSnow size={12} className="text-white" />;
-    if (d.includes('fog') || d.includes('mist')) return <CloudFog size={12} className="text-slate-400" />;
     return <Cloud size={12} className="text-slate-300" />;
   };
 
@@ -102,12 +102,13 @@ export function Dashboard({ isGuest }: DashboardProps) {
         
         // AQI Data (WAQI)
         // Note: Using demo token. In production, use VITE_WAQI_TOKEN
+        const waqiToken = import.meta.env.VITE_WAQI_TOKEN || 'demo';
         let jkAQI = 0;
         let alAQI = 0;
         try {
           const [jkAqiRes, alAqiRes] = await Promise.all([
-            fetch('https://api.waqi.info/feed/jakarta/?token=demo'),
-            fetch('https://api.waqi.info/feed/algiers/?token=demo')
+            fetch(`https://api.waqi.info/feed/jakarta/?token=${waqiToken}`),
+            fetch(`https://api.waqi.info/feed/algiers/?token=${waqiToken}`)
           ]);
           const jkAQIData = await jkAqiRes.json();
           const alAQIData = await alAqiRes.json();
@@ -483,6 +484,56 @@ export function Dashboard({ isGuest }: DashboardProps) {
 
   return (
     <div className="space-y-6 min-h-screen pb-12">
+      {/* Ops Intelligence Bar */}
+      <motion.div 
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="theme-container bg-gradient-to-r from-blue-900/10 via-slate-900/5 to-emerald-900/10 border-white/5 p-3 flex flex-wrap items-center justify-center gap-6 md:gap-12"
+      >
+        <div className="flex items-center gap-3">
+          <Globe className="text-blue-500 animate-pulse-slow" size={14} />
+          <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Ops Intelligence</h3>
+        </div>
+
+        <div className="flex items-center gap-8 md:gap-16">
+          {[
+            { id: 'JKT', city: 'Jakarta, ID', time: times.jakarta, weather: weather?.jakarta, color: 'emerald' },
+            { id: 'ALG', city: 'Algiers, DZ', time: times.algiers, weather: weather?.algiers, color: 'blue' }
+          ].map(location => (
+            <div key={location.id} className="flex items-center gap-4 group">
+              <div className="flex items-center gap-3">
+                <div className={cn("w-7 h-7 rounded-lg flex items-center justify-center font-black text-[10px] border shadow-xl transition-all group-hover:scale-110", 
+                  location.id === 'JKT' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                )}>
+                  {location.id}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-mono font-black text-white tracking-wider leading-none">{location.time}</p>
+                    <span className="text-[8px] text-slate-600 font-black uppercase tracking-tighter">{location.city}</span>
+                  </div>
+                </div>
+              </div>
+              
+              {location.weather && (
+                <div className="flex items-center gap-3 pl-4 border-l border-white/5">
+                  <div className="flex items-center gap-1.5">
+                    {getWeatherIcon(location.weather.desc)}
+                    <span className="text-[11px] font-mono font-black text-slate-300">{location.weather.temp}°C</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[7px] font-black text-slate-600 uppercase leading-none mb-0.5">AQI</span>
+                    <span className={cn("text-[9px] font-black uppercase leading-none", getAQIInfo(location.weather.aqi).color)}>
+                      {location.weather.aqi || '--'}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </motion.div>
+
       {/* Metrics Row */}
       <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         {[
@@ -522,45 +573,10 @@ export function Dashboard({ isGuest }: DashboardProps) {
 
       {/* Main Grid Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Sidebar: Global Intel & Events */}
+        {/* Sidebar: Events */}
         <div className="lg:col-span-1 flex flex-col gap-4">
-          {/* Global Operations Card */}
-          <div className="theme-container bg-gradient-to-br from-blue-900/10 to-transparent border-blue-500/10 p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Globe className="text-blue-500" size={12} />
-              <h3 className="text-[9px] font-black uppercase tracking-widest text-white">Ops Intelligence</h3>
-            </div>
-            <div className="space-y-2">
-              {[
-                { id: 'JKT', city: 'Jakarta, ID', time: times.jakarta, weather: weather?.jakarta, color: 'emerald' },
-                { id: 'ALG', city: 'Algiers, DZ', time: times.algiers, weather: weather?.algiers, color: 'blue' }
-              ].map(location => (
-                <div key={location.id} className="flex items-center justify-between p-2 rounded bg-black/40 border border-white/5 group hover:bg-white/[0.03] transition-colors">
-                  <div className="flex items-center gap-2">
-                    <div className={cn("w-6 h-6 rounded flex items-center justify-center font-bold text-[8px]", `bg-${location.color}-500/10 text-${location.color}-500`)}>
-                      {location.id}
-                    </div>
-                    <div>
-                      <p className="text-[12px] font-mono font-black text-white leading-tight">{location.time}</p>
-                      <p className="text-[7px] text-slate-600 font-bold uppercase">{location.city}</p>
-                    </div>
-                  </div>
-                  {location.weather && (
-                    <div className="text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        {getWeatherIcon(location.weather.desc)}
-                        <span className="text-[10px] font-mono font-bold text-slate-300">{location.weather.temp}°C</span>
-                      </div>
-                      <span className={cn("text-[7px] font-black uppercase", getAQIInfo(location.weather.aqi).color)}>AQI {location.weather.aqi || '--'}</span>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-
           {/* Compact Hub Events */}
-          <div className="theme-container p-4 bg-emerald-900/5 border-emerald-500/10 flex-1 flex flex-col">
+          <div className="theme-container p-4 bg-emerald-900/5 border-emerald-500/10 flex-1 flex flex-col min-h-[300px]">
           <div className="flex items-center justify-between mb-4 shrink-0">
                <div className="flex items-center gap-2">
                  <Tag className="text-emerald-500" size={14} />
@@ -658,7 +674,7 @@ export function Dashboard({ isGuest }: DashboardProps) {
                   return (
                     <div key={group} className={cn("p-2.5 rounded border border-white/5 transition-all hover:bg-white/[0.02]", `bg-${colorClass}-500/5`)}>
                 <div className="flex justify-between items-center mb-1.5">
-                        <span className="text-[13px] font-black text-white">{group.startsWith('Group') ? group.replace('Group ', 'GP') : `GP ${group}`}</span>
+                        <span className="text-[13px] font-black text-white">{group.startsWith('Group') ? group : `Group ${group}`}</span>
                         <span className={cn("text-[9px] font-black uppercase", `text-${colorClass}-400`)}>
                           {status.replace('_', ' ')}
                         </span>
@@ -794,7 +810,7 @@ export function Dashboard({ isGuest }: DashboardProps) {
               <div className="flex items-center gap-3">
                 {/* Group Filter */}
                 <div className="flex items-center gap-2 px-3 py-1.5 bg-white/[0.03] border border-white/10 rounded-lg group/filter hover:bg-white/[0.05] transition-colors">
-                  <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">GP:</span>
+                  <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">GROUP:</span>
                   <select 
                     value={selectedGroup} 
                     onChange={(e) => setSelectedGroup(e.target.value)}
