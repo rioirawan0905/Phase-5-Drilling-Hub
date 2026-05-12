@@ -49,11 +49,12 @@
       "properties": {
         "title": { "type": "string" },
         "description": { "type": "string" },
+        "location": { "type": "string", "enum": ["Algiers", "Hassi Messaoud", "MLN", "Other"] },
         "startDate": { "type": "string" },
         "endDate": { "type": "string" },
         "type": { "type": "string", "enum": ["general", "meeting", "walkthrough", "holiday"] }
       },
-      "required": ["title", "startDate", "endDate", "type"]
+      "required": ["title", "startDate", "endDate", "type", "location"]
     }
   },
   "firestore": {

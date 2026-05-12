@@ -25,6 +25,7 @@ export interface HubEvent {
   startDate: string;
   endDate: string;
   type: 'general' | 'meeting' | 'walkthrough' | 'holiday';
+  location: 'Algiers' | 'Hassi Messaoud' | 'MLN' | 'Other';
 }
 
 export type FlightStatus = 'Requested' | 'Not Received' | 'Received' | 'Need Action' | 'Not Requested';

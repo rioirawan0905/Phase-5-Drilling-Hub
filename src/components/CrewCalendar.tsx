@@ -19,6 +19,7 @@ const scheduleSchema = z.object({
 const eventSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   description: z.string().optional(),
+  location: z.enum(['Algiers', 'Hassi Messaoud', 'MLN', 'Other'] as const),
   startDate: z.string().min(1, 'Start date is required'),
   endDate: z.string().min(1, 'End date is required'),
   type: z.enum(['general', 'meeting', 'walkthrough', 'holiday'] as const),
@@ -141,6 +142,7 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
       type: 'general', 
       title: '',
       description: '',
+      location: 'MLN',
       startDate: dateStr || new Date().toISOString().split('T')[0], 
       endDate: dateStr || new Date().toISOString().split('T')[0]
     });
@@ -153,6 +155,7 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
     resetEvent({
       title: ev.title,
       description: ev.description || '',
+      location: ev.location || 'MLN',
       startDate: ev.startDate,
       endDate: ev.endDate,
       type: ev.type
@@ -856,6 +859,19 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                     <input type="date" {...registerEvent('endDate')} className="w-full bg-[#0a0a0c] border border-white/5 px-4 py-2.5 text-sm text-slate-300 rounded-lg focus:outline-none focus:border-emerald-500/30" />
                     {eventErrors.endDate && <p className="text-[10px] text-rose-500 px-1">{eventErrors.endDate.message}</p>}
                   </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-500 uppercase font-bold px-1">Location</label>
+                  <select 
+                    {...registerEvent('location')}
+                    className="w-full bg-[#0a0a0c] border border-white/5 px-4 py-2.5 text-sm text-slate-300 rounded-lg focus:outline-none focus:border-emerald-500/30"
+                  >
+                    <option value="Algiers">Algiers</option>
+                    <option value="Hassi Messaoud">Hassi Messaoud</option>
+                    <option value="MLN">MLN</option>
+                    <option value="Other">Other</option>
+                  </select>
                 </div>
 
                 <div className="space-y-1">

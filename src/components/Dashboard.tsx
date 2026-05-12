@@ -464,8 +464,8 @@ export function Dashboard({ isGuest }: DashboardProps) {
             color: 'text-orange-400',
             extra: (
               <div className="group relative inline-block ml-1">
-                <Info size={10} className="text-slate-600 cursor-help" />
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-[#16161a] border border-white/10 rounded text-[8px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none shadow-2xl">
+                <Info size={12} className="text-slate-600 cursor-help" />
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-[#16161a] border border-white/10 rounded text-[9px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none shadow-2xl">
                   Percentage of total personnel currently on-site and on active duty.
                 </div>
               </div>
@@ -474,131 +474,115 @@ export function Dashboard({ isGuest }: DashboardProps) {
         ].map((item, i) => (
           <motion.div 
             initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }}
-            key={item.label} className="theme-card p-3 md:p-6"
+            key={item.label} className="theme-card p-4 md:p-7"
           >
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-[8px] md:text-[10px] text-slate-500 uppercase tracking-widest truncate">{item.label}</p>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[10px] md:text-[11px] text-slate-500 uppercase tracking-widest truncate font-bold">{item.label}</p>
               {item.extra}
             </div>
-            <div className="flex flex-col sm:flex-row sm:items-baseline gap-0 md:gap-2">
-              <span className={cn("text-lg md:text-2xl font-light", item.color)}>{item.val}</span>
-              <span className="text-[7px] md:text-[10px] text-slate-500 leading-none truncate">{item.sub}</span>
+            <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 md:gap-3">
+              <span className={cn("text-xl md:text-3xl font-light", item.color)}>{item.val}</span>
+              <span className="text-[9px] md:text-[11px] text-slate-500 leading-none truncate">{item.sub}</span>
             </div>
           </motion.div>
         ))}
       </div>
 
-      {/* Global Operations & Group Deployment */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-        {/* World Clocks & Weather */}
-        <div className="lg:col-span-1 flex flex-col gap-6">
-          <div className="theme-container bg-gradient-to-br from-blue-900/10 to-transparent border-blue-500/10 p-4 md:p-6 shrink-0">
-            <div className="flex items-center gap-2 mb-4">
-              <Globe className="text-blue-500" size={14} />
-              <h3 className="text-[10px] font-black uppercase tracking-widest text-white">Global Operations</h3>
+      {/* Main Grid Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* Sidebar: Global Intel & Events */}
+        <div className="lg:col-span-1 flex flex-col gap-4">
+          {/* Global Operations Card */}
+          <div className="theme-container bg-gradient-to-br from-blue-900/10 to-transparent border-blue-500/10 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Globe className="text-blue-500" size={12} />
+              <h3 className="text-[9px] font-black uppercase tracking-widest text-white">Ops Intelligence</h3>
             </div>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-3 rounded-lg bg-black/20 border border-white/5 group hover:bg-white/[0.02] transition-colors">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500">
-                    <span className="font-bold text-[10px]">JKT</span>
-                  </div>
-                  <div>
-                    <p className="text-[9px] text-slate-500 font-bold uppercase">Jakarta, ID</p>
-                    <p className="text-[14px] font-mono font-black text-white">{times.jakarta}</p>
-                  </div>
-                </div>
-                {weather?.jakarta && (
-                  <div className="text-right flex flex-col items-end">
-                    <div className="flex items-center justify-end gap-1.5 mb-0.5">
-                      {getWeatherIcon(weather.jakarta.desc)}
-                      <p className="text-[14px] font-mono font-bold text-orange-400">{weather.jakarta.temp}°C</p>
+            <div className="space-y-2">
+              {[
+                { id: 'JKT', city: 'Jakarta, ID', time: times.jakarta, weather: weather?.jakarta, color: 'emerald' },
+                { id: 'ALG', city: 'Algiers, DZ', time: times.algiers, weather: weather?.algiers, color: 'blue' }
+              ].map(location => (
+                <div key={location.id} className="flex items-center justify-between p-2 rounded bg-black/40 border border-white/5 group hover:bg-white/[0.03] transition-colors">
+                  <div className="flex items-center gap-2">
+                    <div className={cn("w-6 h-6 rounded flex items-center justify-center font-bold text-[8px]", `bg-${location.color}-500/10 text-${location.color}-500`)}>
+                      {location.id}
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[8px] text-slate-600 font-bold uppercase truncate max-w-[60px]">{weather.jakarta.desc}</span>
-                      <div className="flex items-center gap-1 border-l border-white/10 pl-1.5">
-                        <Wind size={8} className="text-slate-500" />
-                        <span className={cn("text-[8px] font-black", getAQIInfo(weather.jakarta.aqi).color)}>AQI {weather.jakarta.aqi || '--'}</span>
+                    <div>
+                      <p className="text-[12px] font-mono font-black text-white leading-tight">{location.time}</p>
+                      <p className="text-[7px] text-slate-600 font-bold uppercase">{location.city}</p>
+                    </div>
+                  </div>
+                  {location.weather && (
+                    <div className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        {getWeatherIcon(location.weather.desc)}
+                        <span className="text-[10px] font-mono font-bold text-slate-300">{location.weather.temp}°C</span>
                       </div>
+                      <span className={cn("text-[7px] font-black uppercase", getAQIInfo(location.weather.aqi).color)}>AQI {location.weather.aqi || '--'}</span>
                     </div>
-                  </div>
-                )}
-              </div>
-              <div className="flex items-center justify-between p-3 rounded-lg bg-black/20 border border-white/5 group hover:bg-white/[0.02] transition-colors">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500">
-                    <span className="font-bold text-[10px]">ALG</span>
-                  </div>
-                  <div>
-                    <p className="text-[9px] text-slate-500 font-bold uppercase">Algiers, DZ</p>
-                    <p className="text-[14px] font-mono font-black text-white">{times.algiers}</p>
-                  </div>
+                  )}
                 </div>
-                {weather?.algiers && (
-                  <div className="text-right flex flex-col items-end">
-                    <div className="flex items-center justify-end gap-1.5 mb-0.5">
-                      {getWeatherIcon(weather.algiers.desc)}
-                      <p className="text-[14px] font-mono font-bold text-blue-400">{weather.algiers.temp}°C</p>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[8px] text-slate-600 font-bold uppercase truncate max-w-[60px]">{weather.algiers.desc}</span>
-                      <div className="flex items-center gap-1 border-l border-white/10 pl-1.5">
-                        <Wind size={8} className="text-slate-500" />
-                        <span className={cn("text-[8px] font-black", getAQIInfo(weather.algiers.aqi).color)}>AQI {weather.algiers.aqi || '--'}</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
+              ))}
             </div>
           </div>
 
-          {/* New Events Section */}
-          <div className="theme-container p-4 md:p-6 bg-emerald-900/5 border-emerald-500/10 flex-1 flex flex-col">
-            <div className="flex items-center justify-between mb-4 shrink-0">
+          {/* Compact Hub Events */}
+          <div className="theme-container p-4 bg-emerald-900/5 border-emerald-500/10 flex-1 flex flex-col">
+          <div className="flex items-center justify-between mb-4 shrink-0">
                <div className="flex items-center gap-2">
                  <Tag className="text-emerald-500" size={14} />
-                 <h3 className="text-[10px] font-black uppercase tracking-widest text-white">Hub Events</h3>
+                 <h3 className="text-[11px] font-black uppercase tracking-widest text-white">Hub Events</h3>
                </div>
-               <span className="text-[8px] font-mono text-emerald-500/50 uppercase">Timeline</span>
-            </div>
+               <span className="text-[9px] font-mono text-emerald-500/50 uppercase">Active</span>
+          </div>
             
-            <div className="flex-1 space-y-4 overflow-y-auto custom-scrollbar pr-2 max-h-[300px]">
-              <div>
-                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 px-1">Upcoming & Active</p>
-                <div className="space-y-2">
-                  {upcomingEvents.map(ev => (
-                    <div key={ev.id} className="p-3 rounded-lg bg-black/40 border border-white/5 group hover:border-emerald-500/30 transition-all">
-                      <div className="flex items-center justify-between mb-1">
-                        <div className="flex items-center gap-2">
-                          {getEventIcon(ev.type, 10)}
-                          <span className="text-[9px] font-bold text-slate-200 uppercase truncate max-w-[120px]">{ev.title}</span>
-                        </div>
-                        <span className="text-[7px] font-mono text-slate-600 uppercase bg-white/5 px-1 rounded">{ev.type}</span>
+          <div className="flex-1 space-y-3 overflow-y-auto custom-scrollbar pr-1 max-h-[250px]">
+              {upcomingEvents.length > 0 ? (
+                upcomingEvents.map(ev => (
+                  <div key={ev.id} className="p-2.5 rounded-lg bg-black/40 border border-white/5 group hover:border-emerald-500/30 transition-all">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-2 min-w-0">
+                        {getEventIcon(ev.type, 10)}
+                        <span className="text-[10px] font-bold text-slate-200 uppercase truncate" title={ev.title}>{ev.title}</span>
                       </div>
-                      <p className="text-[8px] text-slate-500 font-mono italic">{formatDate(ev.startDate)} - {formatDate(ev.endDate)}</p>
-                      {ev.description && (
-                        <p className="text-[8px] text-slate-600 mt-1 line-clamp-1 group-hover:line-clamp-none transition-all">{ev.description}</p>
-                      )}
+                      <span className="text-[8px] font-mono text-slate-500 uppercase bg-white/5 px-1.5 rounded shrink-0">{ev.type}</span>
                     </div>
-                  ))}
-                  {upcomingEvents.length === 0 && (
-                    <p className="text-[8px] text-slate-600 italic px-1">No upcoming events</p>
-                  )}
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-1.5 text-slate-500">
+                        <Globe size={10} className="text-slate-600" />
+                        <span className="text-[9px] font-bold uppercase tracking-tight">{ev.location || 'MLN'}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <p className="text-[9px] text-slate-400 font-mono italic">
+                          {ev.startDate === ev.endDate ? formatDate(ev.startDate) : `${formatDate(ev.startDate)} - ${formatDate(ev.endDate)}`}
+                        </p>
+                        {getDaysUntil(ev.startDate) <= 0 && getDaysUntil(ev.endDate) >= 0 && (
+                          <span className="text-[8px] font-black text-emerald-500 animate-pulse uppercase">Active</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="py-4 text-center opacity-20">
+                  <p className="text-[8px] font-bold uppercase tracking-widest">No Events</p>
                 </div>
-              </div>
-
+              )}
+              
               {pastEvents.length > 0 && (
-                <div>
-                  <p className="text-[9px] font-black text-slate-700 uppercase tracking-widest mb-2 px-1">Past Events</p>
-                  <div className="space-y-2 opacity-60">
-                    {pastEvents.map(ev => (
-                      <div key={ev.id} className="p-2 rounded-lg bg-black/20 border border-white/5">
-                        <div className="flex items-center gap-2 mb-1">
+                <div className="pt-2 border-t border-white/5 mt-2">
+                  <p className="text-[8px] font-black text-slate-700 uppercase tracking-widest mb-2">Past Events</p>
+                  <div className="space-y-1.5 opacity-50">
+                    {pastEvents.slice(0, 3).map(ev => (
+                      <div key={ev.id} className="flex flex-col gap-0.5 px-1 py-1 rounded hover:bg-white/[0.02]">
+                        <div className="flex items-center gap-1">
                           {getEventIcon(ev.type, 8)}
                           <span className="text-[8px] font-bold text-slate-400 uppercase truncate">{ev.title}</span>
                         </div>
-                        <p className="text-[7px] text-slate-600 font-mono italic">{formatDate(ev.startDate)}</p>
+                        <p className="text-[6px] text-slate-600 font-mono italic">
+                          {ev.startDate === ev.endDate ? formatDate(ev.startDate) : `${formatDate(ev.startDate)} - ${formatDate(ev.endDate)}`}
+                        </p>
                       </div>
                     ))}
                   </div>
@@ -608,162 +592,150 @@ export function Dashboard({ isGuest }: DashboardProps) {
           </div>
         </div>
 
-        {/* Fleet Rotation Matrix & Operational Continuity */}
-        <div className="lg:col-span-2 theme-container overflow-hidden p-0 flex flex-col xl:flex-row bg-[#0d0d0f]">
-          {/* Left: Rotation Matrix */}
-          <div className="w-full xl:w-[45%] p-4 md:p-6 border-b xl:border-b-0 xl:border-r border-white/5 bg-white/[0.01]">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-2">
-                <LayoutGrid className="text-emerald-500" size={14} />
-                <h3 className="text-[10px] font-black uppercase tracking-widest text-white">Rotation Matrix</h3>
+        {/* Fleet Matrix & Analytics Pulse */}
+        <div className="lg:col-span-3 flex flex-col gap-6">
+          <div className="theme-container overflow-hidden p-0 flex flex-col xl:flex-row bg-[#0d0d0f] min-h-[320px]">
+            {/* Left: Rotation Matrix (Compact Width) */}
+            <div className="w-full xl:w-[40%] p-5 border-b xl:border-b-0 xl:border-r border-white/5 bg-white/[0.01] flex flex-col">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <LayoutGrid className="text-emerald-500" size={14} />
+                  <h3 className="text-[10px] font-black uppercase tracking-widest text-white">Rotation Status</h3>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_4px_rgba(16,185,129,0.5)]"></div>
+                  <span className="text-[8px] text-slate-500 font-bold uppercase tracking-tighter">Live deployment</span>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                <span className="text-[8px] text-slate-500 font-bold uppercase">Active</span>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-3">
-              {uniqueGroups.filter(g => g && g !== 'ALL').map(group => {
-                const members = personnel.filter(p => p.rosterGroup === group);
-                const today = new Date().toISOString().split('T')[0];
-                const groupSchedules = schedules.filter(s => 
-                  members.some(m => m.id === s.personnelId) && 
-                  today >= s.startDate && today <= s.endDate
-                );
-                
-                const onDuty = groupSchedules.filter(s => s.status === 'ON_DUTY').length;
-                const inTransit = groupSchedules.filter(s => s.status === 'IN_TRANSIT').length;
-                const offDuty = groupSchedules.filter(s => s.status === 'OFF_DUTY').length;
-                
-                const dominantStatus = onDuty > 0 ? 'ON_DUTY' : inTransit > 0 ? 'IN_TRANSIT' : 'OFF_DUTY';
-                const statusColor = dominantStatus === 'ON_DUTY' ? 'text-emerald-400' : dominantStatus === 'IN_TRANSIT' ? 'text-amber-400' : 'text-blue-400';
-                const bgColor = dominantStatus === 'ON_DUTY' ? 'bg-emerald-500/10' : dominantStatus === 'IN_TRANSIT' ? 'bg-amber-500/10' : 'bg-blue-500/10';
+              
+              <div className="grid grid-cols-2 gap-2 flex-1">
+                {uniqueGroups.filter(g => g && g !== 'ALL').map(group => {
+                  const members = personnel.filter(p => p.rosterGroup === group);
+                  const today = new Date().toISOString().split('T')[0];
+                  const groupSchedules = schedules.filter(s => 
+                    members.some(m => m.id === s.personnelId) && 
+                    today >= s.startDate && today <= s.endDate
+                  );
+                  
+                  const onDuty = groupSchedules.filter(s => s.status === 'ON_DUTY').length;
+                  const inTransit = groupSchedules.filter(s => s.status === 'TRANSIT').length;
+                  
+                  const status = onDuty > 0 ? 'ON_DUTY' : inTransit > 0 ? 'IN_TRANSIT' : 'OFF_DUTY';
+                  const colorClass = status === 'ON_DUTY' ? 'emerald' : status === 'IN_TRANSIT' ? 'amber' : 'blue';
 
-                return (
-                  <div key={group} className={cn("p-3 rounded-lg border border-white/5 transition-all hover:border-white/20", bgColor)}>
-                    <div className="flex justify-between items-start mb-2">
-                      <span className="text-[12px] font-black text-white">{group.startsWith('Group') ? group.replace('Group ', 'GP-') : `GP-${group}`}</span>
-                      <span className={cn("text-[8px] font-mono font-bold uppercase", statusColor)}>
-                        {dominantStatus.replace('_', ' ')}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex -space-x-1.5">
-                        {members.slice(0, 3).map((p, i) => (
-                          <div key={p.id} className="w-5 h-5 rounded-full border-2 border-[#0d0d0f] bg-slate-800 flex items-center justify-center text-[7px] text-white font-bold">
-                            {p.fullName.charAt(0)}
-                          </div>
-                        ))}
-                        {members.length > 3 && (
-                          <div className="w-5 h-5 rounded-full border-2 border-[#0d0d0f] bg-slate-700 flex items-center justify-center text-[6px] text-slate-400 font-bold">
-                            +{members.length - 3}
-                          </div>
-                        )}
+                  return (
+                    <div key={group} className={cn("p-2.5 rounded border border-white/5 transition-all hover:bg-white/[0.02]", `bg-${colorClass}-500/5`)}>
+                <div className="flex justify-between items-center mb-1.5">
+                        <span className="text-[13px] font-black text-white">{group.startsWith('Group') ? group.replace('Group ', 'GP') : `GP ${group}`}</span>
+                        <span className={cn("text-[9px] font-black uppercase", `text-${colorClass}-400`)}>
+                          {status.replace('_', ' ')}
+                        </span>
                       </div>
-                      <span className="text-[10px] font-mono text-white/50">{members.length} PX</span>
+                      <div className="flex items-center justify-between">
+                        <div className="flex -space-x-1.5">
+                          {members.slice(0, 3).map((p, i) => (
+                            <div key={p.id} className="w-6 h-6 rounded-full border border-[#0d0d0f] bg-slate-800 flex items-center justify-center text-[9px] text-white font-bold uppercase">
+                              {p.fullName.charAt(0)}
+                            </div>
+                          ))}
+                        </div>
+                        <span className="text-[11px] font-mono text-slate-500">{members.length} PX</span>
+                      </div>
                     </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Right: Pulse Analytics */}
+            <div className="flex-1 p-5 flex flex-col">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-2">
+                  <Plane className="text-blue-500" size={14} />
+                  <h3 className="text-[10px] font-black uppercase tracking-widest text-white">Logistics Pulse</h3>
+                </div>
+                <div className="flex gap-3">
+                   <div className="flex items-center gap-1.5">
+                      <div className="w-2 h-2 rounded-sm bg-blue-500/40"></div>
+                      <span className="text-[8px] text-slate-500 font-bold uppercase">DZ-ID</span>
+                   </div>
+                   <div className="flex items-center gap-1.5">
+                      <div className="w-2 h-2 rounded-sm bg-emerald-500/40"></div>
+                      <span className="text-[8px] text-slate-500 font-bold uppercase">ID-DZ</span>
+                   </div>
+                </div>
+              </div>
+
+              <div className="flex-1 min-h-[140px] mb-4">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={[...availableMonths].sort().map(m => ({
+                    month: formatPeriod(m),
+                    dz_id: allFlights.filter(f => f.requestedDateDZtoID?.startsWith(m)).length,
+                    id_dz: allFlights.filter(f => f.requestedDateIDtoDZ?.startsWith(m)).length,
+                  })).slice(0, 12)}>
+                    <defs>
+                      <linearGradient id="colorDz" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                      </linearGradient>
+                      <linearGradient id="colorId" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.02)" vertical={false} />
+                    <XAxis 
+                      dataKey="month" 
+                      stroke="rgba(255,255,255,0.2)" 
+                      fontSize={7} 
+                      tickLine={false} 
+                      axisLine={false}
+                      interval={0}
+                    />
+                    <YAxis hide />
+                    <RechartsTooltip 
+                      contentStyle={{ backgroundColor: '#111', border: 'none', borderRadius: '4px', fontSize: '9px' }}
+                    />
+                    <Area type="monotone" dataKey="dz_id" stroke="#3b82f6" fillOpacity={1} fill="url(#colorDz)" strokeWidth={2} />
+                    <Area type="monotone" dataKey="id_dz" stroke="#10b981" fillOpacity={1} fill="url(#colorId)" strokeWidth={2} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+
+              <div className="grid grid-cols-2 gap-6 pt-4 border-t border-white/5">
+                <div>
+                  <p className="text-[8px] text-slate-500 font-black uppercase mb-1 tracking-widest">Yearly Volume</p>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-xl font-mono text-white font-black">
+                      {allFlights.filter(f => {
+                         const yr = new Date().getFullYear().toString();
+                         return f.requestedDateDZtoID?.startsWith(yr) || f.requestedDateIDtoDZ?.startsWith(yr);
+                      }).length}
+                    </span>
+                    <span className="text-[9px] text-emerald-500 font-bold tracking-widest">MOVEMENTS</span>
                   </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Right: Transit Pulse Chart */}
-          <div className="flex-1 p-4 md:p-6 flex flex-col">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <Plane className="text-blue-500" size={14} />
-                <h3 className="text-[10px] font-black uppercase tracking-widest text-white">Logistics Pulse</h3>
-              </div>
-              <div className="flex gap-2">
-                 <div className="flex items-center gap-1">
-                    <div className="w-2 h-2 rounded-sm bg-blue-500/40"></div>
-                    <span className="text-[8px] text-slate-600 font-bold uppercase">DZ-ID</span>
-                 </div>
-                 <div className="flex items-center gap-1">
-                    <div className="w-2 h-2 rounded-sm bg-emerald-500/40"></div>
-                    <span className="text-[8px] text-slate-600 font-bold uppercase">ID-DZ</span>
-                 </div>
-              </div>
-            </div>
-
-            <div className="h-32 mb-4">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={[...availableMonths].sort().map(m => ({
-                  month: formatPeriod(m),
-                  dz_id: allFlights.filter(f => f.requestedDateDZtoID?.startsWith(m)).length,
-                  id_dz: allFlights.filter(f => f.requestedDateIDtoDZ?.startsWith(m)).length,
-                })).slice(0, 12)}>
-                  <defs>
-                    <linearGradient id="colorDz" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-                    </linearGradient>
-                    <linearGradient id="colorId" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.02)" vertical={false} />
-                  <XAxis 
-                    dataKey="month" 
-                    stroke="rgba(255,255,255,0.2)" 
-                    fontSize={7} 
-                    tickLine={false} 
-                    axisLine={false}
-                    interval={1}
-                  />
-                  <YAxis hide />
-                  <RechartsTooltip 
-                    contentStyle={{ backgroundColor: '#111', border: 'none', borderRadius: '4px', fontSize: '9px' }}
-                  />
-                  <Area type="monotone" dataKey="dz_id" stroke="#3b82f6" fillOpacity={1} fill="url(#colorDz)" />
-                  <Area type="monotone" dataKey="id_dz" stroke="#10b981" fillOpacity={1} fill="url(#colorId)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 mt-auto pt-4 border-t border-white/5">
-              <div className="p-2">
-                <p className="text-[8px] text-slate-500 font-black uppercase mb-1">Total Movs ({new Date().getFullYear()})</p>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-xl font-mono text-white font-black">
-                    {allFlights.filter(f => {
-                       const yr = new Date().getFullYear().toString();
-                       return f.requestedDateDZtoID?.startsWith(yr) || f.requestedDateIDtoDZ?.startsWith(yr);
-                    }).length}
-                  </span>
-                  <span className="text-[8px] text-emerald-500 font-bold">PAX</span>
                 </div>
-              </div>
-              <div className="p-2 border-l border-white/5 relative group/info">
-                <div className="flex items-center gap-1 mb-1">
-                  <p className="text-[8px] text-slate-500 font-black uppercase">Pipeline Health</p>
-                  <Info size={10} className="text-slate-600 cursor-help" />
-                </div>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-xl font-mono text-white font-black">
-                    {(() => {
-                      const currentMonth = new Date().toISOString().substring(0, 7);
-                      const currentFlights = allFlights.filter(f => 
-                        f.requestedDateDZtoID?.startsWith(currentMonth) || 
-                        f.requestedDateIDtoDZ?.startsWith(currentMonth)
-                      );
-                      if (currentFlights.length === 0) return "100%";
-                      const booked = currentFlights.filter(f => {
-                        const dzidReady = !f.requestedDateDZtoID || f.statusDZtoID === 'Received';
-                        const iddzReady = !f.requestedDateIDtoDZ || f.statusIDtoDZ === 'Received';
-                        return dzidReady && iddzReady;
-                      }).length;
-                      return `${Math.round((booked / currentFlights.length) * 100)}%`;
-                    })()}
-                  </span>
-                  <span className="text-[8px] text-blue-500 font-bold uppercase">READY</span>
-                </div>
-                <div className="absolute bottom-full mb-2 left-0 w-48 bg-black/90 border border-white/10 p-2 rounded text-[8px] text-slate-400 invisible group-hover/info:visible z-50">
-                  <p className="font-bold text-white mb-1 uppercase text-[9px]">Ready Status Definition:</p>
-                   Calculated based on successfully booked (Received) tickets vs requested flights for the current month. 100% indicates all required logistics are fulfilled and verified.
+                <div className="border-l border-white/5 pl-6">
+                  <p className="text-[8px] text-slate-500 font-black uppercase mb-1 tracking-widest">Pipeline Health</p>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-xl font-mono text-white font-black">
+                      {(() => {
+                        const currentMonth = new Date().toISOString().substring(0, 7);
+                        const currentFlights = allFlights.filter(f => 
+                          f.requestedDateDZtoID?.startsWith(currentMonth) || 
+                          f.requestedDateIDtoDZ?.startsWith(currentMonth)
+                        );
+                        if (currentFlights.length === 0) return "100%";
+                        const booked = currentFlights.filter(f => {
+                          const dzidReady = !f.requestedDateDZtoID || f.statusDZtoID === 'Received';
+                          const iddzReady = !f.requestedDateIDtoDZ || f.statusIDtoDZ === 'Received';
+                          return dzidReady && iddzReady;
+                        }).length;
+                        return `${Math.round((booked / currentFlights.length) * 100)}%`;
+                      })()}
+                    </span>
+                    <span className="text-[9px] text-blue-500 font-bold uppercase tracking-widest">READY</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -774,47 +746,36 @@ export function Dashboard({ isGuest }: DashboardProps) {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Labor Analytics Component */}
         <div className="lg:col-span-2 theme-container p-4 md:p-6 bg-white/[0.01]">
-          <div className="flex flex-col sm:flex-row justify-between gap-4 md:gap-6 mb-8">
+          <div className="flex flex-col sm:flex-row justify-between gap-4 md:gap-6 mb-6">
             <div>
-              <h3 className="text-[10px] md:text-xs font-bold text-white uppercase tracking-widest">Labor Force Analytics</h3>
-              <p className="text-[8px] md:text-[10px] text-slate-500 uppercase mt-1">Automatic Calculation: (Days On-Duty × 12h)</p>
+              <h3 className="text-[10px] md:text-xs font-bold text-white uppercase tracking-widest">Labor Analytics</h3>
+              <p className="text-[8px] md:text-[9px] text-slate-500 uppercase mt-0.5">Est. Hours: (Days On-Duty × 12h)</p>
             </div>
             
-            <div className="flex flex-wrap items-center gap-2 md:gap-3">
-              <div className="flex items-center gap-2 px-2 md:px-3 py-1 bg-black/40 border border-white/5 rounded-lg text-[8px] md:text-[9px]">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-2 px-2 py-1 bg-black/40 border border-white/5 rounded text-[8px] md:text-[9px]">
                 <Users size={10} className="text-slate-500" />
                 <select 
                   value={selectedGroup} 
                   onChange={(e) => setSelectedGroup(e.target.value)}
                   className="bg-transparent text-slate-300 focus:outline-none uppercase font-bold"
                 >
-                  <option value="ALL">All Groups</option>
+                  <option value="ALL">Group: ALL</option>
                   {uniqueGroups.map(g => <option key={g} value={g}>{g}</option>)}
                 </select>
               </div>
-              <div className="flex items-center gap-2 px-2 md:px-3 py-1 bg-black/40 border border-white/5 rounded-lg text-[8px] md:text-[9px]">
-                <Users size={10} className="text-slate-500" />
-                <select 
-                  value={selectedPersonnel} 
-                  onChange={(e) => setSelectedPersonnel(e.target.value)}
-                  className="bg-transparent text-slate-300 focus:outline-none uppercase font-bold"
-                >
-                  <option value="ALL">All Staff</option>
-                  {personnel.sort((a,b) => a.fullName.localeCompare(b.fullName)).map(p => <option key={p.id} value={p.id}>{p.fullName}</option>)}
-                </select>
-              </div>
-              <div className="flex items-center gap-2 px-2 md:px-3 py-1 bg-black/40 border border-white/5 rounded-lg text-[8px] md:text-[9px] relative group/select">
+              <div className="flex items-center gap-2 px-2 py-1 bg-black/40 border border-white/5 rounded text-[8px] md:text-[9px] relative group/select">
                 <Calendar size={10} className="text-slate-500" />
-                <button className="bg-transparent text-slate-300 focus:outline-none uppercase font-bold min-w-[80px] text-left">
+                <button className="bg-transparent text-slate-300 focus:outline-none uppercase font-bold min-w-[70px] text-left">
                   {selectedPeriods.length === 0 ? 'All Periods' : 
                    selectedPeriods.length === 1 ? formatPeriod(selectedPeriods[0]) :
-                   `${selectedPeriods.length} Periods`}
+                   `${selectedPeriods.length} Mo`}
                 </button>
-                <div className="absolute top-full left-0 mt-1 w-48 max-h-60 overflow-y-auto bg-[#16161a] border border-white/10 rounded-lg shadow-2xl z-50 hidden group-hover/select:block custom-scrollbar">
+                <div className="absolute top-full left-0 mt-1 w-40 max-h-52 overflow-y-auto bg-[#16161a] border border-white/10 rounded-lg shadow-2xl z-50 hidden group-hover/select:block custom-scrollbar">
                   <div 
                     onClick={() => togglePeriod('ALL')}
                     className={cn(
-                      "px-4 py-2 text-[10px] uppercase font-bold transition-colors cursor-pointer",
+                      "px-3 py-1.5 text-[9px] uppercase font-bold transition-colors cursor-pointer",
                       selectedPeriods.length === 0 ? "text-blue-500 bg-blue-500/5" : "text-slate-400 hover:text-white"
                     )}
                   >
@@ -825,7 +786,7 @@ export function Dashboard({ isGuest }: DashboardProps) {
                       key={m}
                       onClick={() => togglePeriod(m)}
                       className={cn(
-                        "px-4 py-2 text-[10px] uppercase font-bold transition-colors cursor-pointer flex justify-between items-center",
+                        "px-3 py-1.5 text-[9px] uppercase font-bold transition-colors cursor-pointer flex justify-between items-center",
                         selectedPeriods.includes(m) ? "text-blue-500 bg-blue-500/5" : "text-slate-400 hover:text-white"
                       )}
                     >
@@ -838,15 +799,16 @@ export function Dashboard({ isGuest }: DashboardProps) {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-8">
-            <div className="h-[220px] md:h-[280px]">
+          <div className="flex flex-col md:flex-row gap-6">
+            <div className="flex-1 min-h-[220px]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={laborAnalytics.chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" vertical={false} />
                   <XAxis 
                     dataKey="name" 
-                    stroke="rgba(255,255,255,0.3)" 
-                    fontSize={7} 
+                    stroke="rgba(255,255,255,0.2)" 
+                    fontSize={10} 
+                    fontWeight="bold" 
                     tickLine={false} 
                     axisLine={false} 
                     interval={0}
@@ -854,12 +816,12 @@ export function Dashboard({ isGuest }: DashboardProps) {
                     textAnchor="end"
                     height={60}
                   />
-                  <YAxis stroke="rgba(255,255,255,0.3)" fontSize={7} tickLine={false} axisLine={false} />
+                  <YAxis stroke="rgba(255,255,255,0.2)" fontSize={7} tickLine={false} axisLine={false} />
                   <RechartsTooltip 
                     cursor={{ fill: 'rgba(255,255,255,0.02)' }}
-                    contentStyle={{ backgroundColor: 'var(--theme-card)', border: '1px solid var(--theme-border)', borderRadius: '8px', fontSize: '9px' }}
+                    contentStyle={{ backgroundColor: '#111', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px', fontSize: '9px' }}
                   />
-                  <Bar dataKey="hours" radius={[4, 4, 0, 0]}>
+                  <Bar dataKey="hours" radius={[2, 2, 0, 0]} barSize={20}>
                     {laborAnalytics.chartData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={groupColorMap[entry.group] || '#3b82f6'} />
                     ))}
@@ -868,11 +830,11 @@ export function Dashboard({ isGuest }: DashboardProps) {
               </ResponsiveContainer>
             </div>
             
-            <div className="flex flex-wrap gap-4 pt-4 border-t border-white/5">
-              {Object.entries(groupColorMap).filter(([key]) => key.length <= 1).map(([group, color]) => (
+            <div className="md:w-32 flex flex-col justify-center gap-2 pt-4 md:pt-0 border-t md:border-t-0 md:border-l border-white/5 pl-0 md:pl-4">
+              {Object.entries(groupColorMap).slice(0, 5).map(([group, color]) => (
                 <div key={group} className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }}></div>
-                  <span className="text-[10px] text-slate-500 font-bold uppercase">GROUP {group}</span>
+                  <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }}></div>
+                  <span className="text-[8px] text-slate-500 font-bold uppercase">GP {group}</span>
                 </div>
               ))}
             </div>
@@ -880,16 +842,16 @@ export function Dashboard({ isGuest }: DashboardProps) {
         </div>
 
         {/* Personnel Status Manifest */}
-        <div className="theme-card p-6 flex flex-col">
-          <div className="flex items-center justify-between mb-6">
+        <div className="theme-card p-5 flex flex-col max-h-[400px]">
+          <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="text-xs font-bold text-white uppercase tracking-widest">Live Manifest</h3>
-              <p className="text-[10px] text-slate-500 uppercase mt-1">Real-time status</p>
+              <h3 className="text-sm font-bold text-white uppercase tracking-widest">Live Manifest</h3>
+              <p className="text-[11px] text-slate-500 uppercase mt-0.5">Real-time presence</p>
             </div>
-            <Users size={14} className="text-blue-500" />
+            <Users size={12} className="text-blue-500" />
           </div>
           
-          <div className="space-y-2 max-h-[320px] overflow-y-auto custom-scrollbar pr-2 flex-1">
+          <div className="space-y-1.5 overflow-y-auto custom-scrollbar pr-1 flex-1">
             {personnel.map(p => {
                const now = new Date();
                now.setHours(0,0,0,0);
@@ -905,47 +867,84 @@ export function Dashboard({ isGuest }: DashboardProps) {
             .sort((a,b) => {
               if (a.isOnDuty && !b.isOnDuty) return -1;
               if (!a.isOnDuty && b.isOnDuty) return 1;
-              if (a.isTransit && !b.isTransit) return -1;
-              if (!a.isTransit && b.isTransit) return 1;
-              return a.p.fullName.localeCompare(b.p.fullName);
+              return 0;
             })
             .map(({ p, isOnDuty, isTransit }) => (
-              <div key={p.id} className="flex items-center justify-between p-2.5 rounded-lg bg-white/[0.02] border border-white/5 transition-all group">
-                <div className="flex items-center gap-3">
+              <div key={p.id} className="flex items-center justify-between p-2.5 rounded bg-white/[0.01] border border-white/5 hover:bg-white/[0.03] transition-all">
+                <div className="flex items-center gap-2.5">
                   <div className={cn(
                     "w-1.5 h-1.5 rounded-full",
-                    isOnDuty ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,1)] animate-pulse" : 
-                    isTransit ? "bg-blue-400" : "bg-slate-600"
+                    isOnDuty ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)] animate-pulse" : isTransit ? "bg-blue-400" : "bg-slate-700"
                   )} />
-                  <div>
-                    <p className="text-[11px] font-bold text-white uppercase tracking-tighter">{p.fullName}</p>
-                    <p className="text-[8px] text-slate-600 uppercase font-mono">{p.rosterGroup}</p>
-                  </div>
+                  <p className="text-[11px] font-bold text-slate-200 uppercase tracking-tighter truncate max-w-[120px]">{p.fullName}</p>
                 </div>
-                <div className={cn(
-                  "px-1.5 py-0.5 rounded text-[7px] font-black uppercase tracking-tighter",
-                  isOnDuty ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/10" : 
-                  isTransit ? "bg-blue-400/10 text-blue-400 border border-blue-400/10" :
-                  "bg-slate-500/10 text-slate-500 border border-slate-500/10"
+                <span className={cn(
+                  "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter border",
+                  isOnDuty ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : 
+                  isTransit ? "bg-blue-400/10 text-blue-400 border-blue-400/20" : 
+                  "bg-slate-500/10 text-slate-500 border-slate-500/20"
                 )}>
                   {isOnDuty ? 'On Duty' : isTransit ? 'Transit' : 'Off Duty'}
-                </div>
+                </span>
               </div>
             ))}
           </div>
         </div>
       </div>
 
-      {/* Analytics Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="theme-card p-6 flex flex-col">
-          <div className="flex items-center justify-between mb-8">
+      {/* Logistics Intelligence Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* Fulfillment Sync (Pie Chart) */}
+        <div className="lg:col-span-1 theme-card p-5">
+          <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="text-xs font-bold text-white uppercase tracking-widest">Awaiting Fulfillment</h3>
-              <p className="text-[10px] text-slate-500 uppercase mt-1">Pending ticket actions</p>
+              <h3 className="text-[10px] font-black text-white uppercase tracking-widest">Fulfillment Sync</h3>
+              <p className="text-[8px] text-slate-500 uppercase mt-0.5">Ticket Completion Ratio</p>
             </div>
-            <Clock size={12} className="text-blue-500" />
-          </div>          <div className="flex-1 space-y-3 overflow-y-auto custom-scrollbar pr-1 max-h-[400px]">
+            <CheckCircle2 size={12} className="text-emerald-500" />
+          </div>
+          <div className="h-[140px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie 
+                  data={statusData} 
+                  cx="50%" 
+                  cy="50%" 
+                  innerRadius={45} 
+                  outerRadius={60} 
+                  paddingAngle={5}
+                  dataKey="value"
+                >
+                  {statusData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={statusColorMap[entry.name] || COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <RechartsTooltip 
+                  contentStyle={{ backgroundColor: '#111', border: 'none', borderRadius: '4px', fontSize: '9px' }} 
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="grid grid-cols-2 gap-2 mt-2">
+             {statusData.slice(0, 4).map((item) => (
+                <div key={item.name} className="flex flex-col p-1.5 bg-white/[0.02] border border-white/5 rounded">
+                   <span className="text-[7px] text-slate-500 uppercase tracking-widest truncate">{item.name}</span>
+                   <span className="text-[10px] text-white font-bold">{item.value}</span>
+                </div>
+             ))}
+          </div>
+        </div>
+
+        {/* Awaiting Fulfillment (Feed) */}
+        <div className="lg:col-span-2 theme-card p-5 flex flex-col">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Clock size={12} className="text-rose-500" />
+              <h3 className="text-[10px] font-black text-white uppercase tracking-widest">Awaiting Ops Action</h3>
+            </div>
+            <span className="text-[8px] font-mono text-rose-500/50 uppercase">Urgent Priority</span>
+          </div>
+          <div className="flex-1 space-y-2 overflow-y-auto custom-scrollbar pr-1 max-h-[300px]">
              {allFlights
                .filter(f => f.statusDZtoID === 'Requested' || f.statusIDtoDZ === 'Requested')
                .sort((a, b) => {
@@ -960,120 +959,78 @@ export function Dashboard({ isGuest }: DashboardProps) {
                .map((f) => {
                 const person = personnel.find(p => p.id === f.personnelId);
                 return (
-                   <div key={f.id} className="p-3 rounded bg-white/[0.02] border border-white/5 group hover:border-blue-500/20 transition-all">
-                      <div className="flex justify-between items-start mb-1">
-                         <span className="text-[11px] text-white font-bold uppercase truncate max-w-[120px]">{person?.fullName || 'Crew member'}</span>
-                         <span className="font-mono text-[8px] text-slate-600">REQ-{f.id.slice(0,4)}</span>
+                   <div key={f.id} className="p-2.5 rx-2 rounded bg-black/40 border border-white/5 flex items-center justify-between group hover:border-rose-500/20 transition-all">
+                      <div className="flex items-center gap-3">
+                         <div className="w-9 h-9 rounded bg-slate-800 flex items-center justify-center text-[12px] font-black text-white border border-white/5">
+                            {person?.fullName.charAt(0)}
+                         </div>
+                         <div>
+                            <p className="text-[12px] text-white font-bold uppercase leading-tight">{person?.fullName}</p>
+                            <p className="text-[9px] text-slate-600 font-mono">REQ-{f.id.slice(0,8)}</p>
+                         </div>
                       </div>
-                      <div className="flex flex-col gap-1.5">
+                      <div className="flex items-center gap-6">
                          {f.requestedDateDZtoID && f.statusDZtoID === 'Requested' && (
-                           <div className="flex items-center justify-between">
-                             <div className="flex flex-col">
-                               <span className="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 text-[7px] font-black uppercase w-fit">DZ → ID</span>
-                               <span className="text-[10px] text-slate-500 font-bold uppercase mt-1 italic leading-tight">
-                                 {getDaysUntil(f.requestedDateDZtoID) === 0 ? 'FLIGHT TODAY' : 
-                                  getDaysUntil(f.requestedDateDZtoID) < 0 ? 'PAST DUE' : 
-                                  `${getDaysUntil(f.requestedDateDZtoID)} DAYS REMAINING`}
-                               </span>
-                             </div>
-                             <span className="text-[9px] text-slate-400 font-mono italic">{formatDate(f.requestedDateDZtoID)}</span>
+                           <div className="text-right">
+                             <p className="text-[9px] font-black text-blue-500 uppercase">Algeria → Indonesia</p>
+                             <p className="text-[11px] text-slate-200 font-mono font-bold leading-none">{formatDate(f.requestedDateDZtoID)}</p>
+                             <p className="text-[9px] text-slate-500 font-bold uppercase mt-1">
+                               {getDaysUntil(f.requestedDateDZtoID) === 0 ? 'DUE TODAY' : 
+                                getDaysUntil(f.requestedDateDZtoID) < 0 ? 'PAST DUE' : 
+                                `${getDaysUntil(f.requestedDateDZtoID)}d remaining`}
+                             </p>
                            </div>
                          )}
                          {f.requestedDateIDtoDZ && f.statusIDtoDZ === 'Requested' && (
-                           <div className="flex items-center justify-between">
-                             <div className="flex flex-col">
-                               <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[7px] font-black uppercase w-fit">ID → DZ</span>
-                               <span className="text-[10px] text-slate-500 font-bold uppercase mt-1 italic leading-tight">
-                                 {getDaysUntil(f.requestedDateIDtoDZ) === 0 ? 'FLIGHT TODAY' : 
-                                  getDaysUntil(f.requestedDateIDtoDZ) < 0 ? 'PAST DUE' : 
-                                  `${getDaysUntil(f.requestedDateIDtoDZ)} DAYS REMAINING`}
-                               </span>
-                             </div>
-                             <span className="text-[9px] text-slate-400 font-mono italic">{formatDate(f.requestedDateIDtoDZ)}</span>
+                           <div className="text-right">
+                             <p className="text-[9px] font-black text-emerald-500 uppercase">Indonesia → Algeria</p>
+                             <p className="text-[11px] text-slate-200 font-mono font-bold leading-none">{formatDate(f.requestedDateIDtoDZ)}</p>
+                             <p className="text-[9px] text-slate-500 font-bold uppercase mt-1">
+                               {getDaysUntil(f.requestedDateIDtoDZ) === 0 ? 'DUE TODAY' : 
+                                getDaysUntil(f.requestedDateIDtoDZ) < 0 ? 'PAST DUE' : 
+                                `${getDaysUntil(f.requestedDateIDtoDZ)}d remaining`}
+                             </p>
                            </div>
                          )}
+                         <ArrowRight size={12} className="text-slate-700 group-hover:text-rose-500 transition-colors" />
                       </div>
                    </div>
                 );
              })}
              {allFlights.filter(f => f.statusDZtoID === 'Requested' || f.statusIDtoDZ === 'Requested').length === 0 && (
-                <div className="h-full flex flex-col items-center justify-center opacity-20 py-10">
-                   <CheckCircle2 size={24} className="mb-2" />
-                   <p className="text-[10px] font-black uppercase">All clear</p>
+                <div className="h-full flex flex-col items-center justify-center opacity-10 py-10">
+                   <CheckCircle2 size={32} className="mb-2" />
+                   <p className="text-[10px] font-black uppercase tracking-[0.3em]">All Clear</p>
                 </div>
              )}
           </div>
         </div>
 
-        <div className="theme-card p-6">
-          <div className="flex items-center justify-between mb-8">
+        {/* Allocation Progress */}
+        <div className="lg:col-span-1 theme-card p-5">
+          <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="text-xs font-bold text-white uppercase tracking-widest">Fulfillment Sync</h3>
-              <p className="text-[10px] text-slate-500 uppercase mt-1">Ticket Completion Ratio</p>
-            </div>
-            <CheckCircle2 size={12} className="text-emerald-500" />
-          </div>
-          <div className="h-[200px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie 
-                  data={statusData} 
-                  cx="50%" 
-                  cy="50%" 
-                  innerRadius={50} 
-                  outerRadius={70} 
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {statusData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={statusColorMap[entry.name] || COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <RechartsTooltip 
-                  contentStyle={{ backgroundColor: 'var(--theme-card)', border: '1px solid var(--theme-border)', borderRadius: '4px', fontSize: '9px', color: 'var(--theme-text)' }} 
-                  itemStyle={{ color: 'var(--theme-text)' }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="grid grid-cols-2 gap-2 mt-4">
-             {statusData.map((item, index) => (
-                <div key={item.name} className="flex flex-col p-2 bg-white/[0.02] border border-white/5 rounded">
-                   <span className="text-[8px] text-slate-500 uppercase tracking-widest">{item.name}</span>
-                   <span className="text-xs text-[var(--theme-text)] font-bold">{item.value}</span>
-                </div>
-             ))}
-          </div>
-        </div>
-
-        <div className="theme-card p-6 shadow-2xl">
-          <div className="flex items-center justify-between mb-8">
-            <div>
-              <h3 className="text-xs font-bold text-white uppercase tracking-widest">Group Allocation</h3>
-              <p className="text-[10px] text-slate-500 uppercase mt-1">Personnel Distribution</p>
+              <h3 className="text-[12px] font-black text-white uppercase tracking-widest">Group Allocation</h3>
+              <p className="text-[10px] text-slate-500 uppercase mt-0.5">Distribution</p>
             </div>
             <LayoutGrid size={12} className="text-orange-500" />
           </div>
-          <div className="space-y-4">
-             {uniqueGroups.map((g, i) => {
+          <div className="space-y-3">
+             {uniqueGroups.slice(0, 5).map((g) => {
                const groupPersonnel = personnel.filter(p => p.rosterGroup === g);
-               const groupCount = groupPersonnel.length;
-               const percent = stats.totalPersonnel ? Math.round((groupCount / stats.totalPersonnel) * 100) : 0;
+               const percent = stats.totalPersonnel ? Math.round((groupPersonnel.length / stats.totalPersonnel) * 100) : 0;
                return (
-                 <div key={g} className="space-y-1 group/bar">
-                   <div className="flex justify-between text-[10px] font-bold uppercase">
-                     <span className="text-slate-400 group-hover/bar:text-white transition-colors">{g}</span>
-                     <span className="text-slate-500">{groupCount} PAX <span className="text-slate-700 font-mono ml-1">({percent}%)</span></span>
+                 <div key={g} className="space-y-1">
+                   <div className="flex justify-between text-[8px] font-bold uppercase">
+                     <span className="text-slate-500">{g}</span>
+                     <span className="text-slate-600">{groupPersonnel.length} PAX</span>
                    </div>
-                   <div className="h-2 bg-white/5 rounded-full overflow-hidden border border-white/5 shadow-inner">
-                     <div className="h-full bg-blue-600 rounded-full group-hover/bar:bg-blue-400 transition-all duration-300" style={{ width: `${percent}%` }}></div>
+                   <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                     <div className="h-full bg-blue-600 rounded-full" style={{ width: `${percent}%` }}></div>
                    </div>
                  </div>
                );
              })}
-             {uniqueGroups.length === 0 && (
-                <p className="text-[10px] text-slate-600 italic">No groups defined</p>
-             )}
           </div>
         </div>
       </div>
@@ -1150,13 +1107,13 @@ export function Dashboard({ isGuest }: DashboardProps) {
         </div>
         <div className="p-0 overflow-x-auto custom-scrollbar">
           <table className="w-full text-left border-collapse min-w-[800px] md:min-w-0">
-            <thead className="text-[10px] text-slate-500 uppercase tracking-widest bg-black/20">
+            <thead className="text-[11px] text-slate-500 uppercase tracking-widest bg-black/40">
               <tr>
-                <th className="py-3 px-6 font-normal">Personnel Name</th>
-                <th className="py-3 px-6 font-normal">Duty Period</th>
-                <th className="py-3 px-6 font-normal">Flight Route</th>
-                <th className="py-3 px-6 font-normal">Status</th>
-                <th className="py-3 px-6 font-normal text-right">System ID</th>
+                <th className="py-3 px-4 font-black border-b border-white/5">Personnel</th>
+                <th className="py-3 px-4 font-black border-b border-white/5">Duty Period</th>
+                <th className="py-3 px-4 font-black border-b border-white/5">Flight Intel</th>
+                <th className="py-3 px-4 font-black border-b border-white/5 text-center">Status</th>
+                <th className="py-3 px-4 font-black border-b border-white/5 text-right">Log ID</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
@@ -1164,28 +1121,28 @@ export function Dashboard({ isGuest }: DashboardProps) {
                 const person = personnel.find(p => p.id === flight.personnelId);
                 return (
                   <tr key={flight.id} className="hover:bg-white/[0.02] group transition-colors">
-                    <td className="py-3 px-6">
-                      <p className="text-xs text-[var(--theme-text)] font-bold uppercase tracking-tighter">{person?.fullName || 'Crew member'}</p>
-                      <p className="text-[9px] text-slate-500 font-mono italic">{person?.title || 'System ID: ' + flight.id.slice(0,4)}</p>
+                    <td className="py-3 px-4">
+                      <p className="text-[13px] text-slate-200 font-bold uppercase tracking-tighter">{person?.fullName || 'Crew member'}</p>
+                      <p className="text-[10px] text-slate-600 font-mono italic">{person?.title || 'System ID: ' + flight.id.slice(0,4)}</p>
                     </td>
-                    <td className="py-3 px-6">
+                    <td className="py-3 px-4">
                       <div className="flex items-center gap-2 text-[11px] text-slate-400 font-mono whitespace-nowrap">
-                         <Calendar size={10} className="text-slate-600" />
+                         <Calendar size={12} className="text-slate-700" />
                          {flight.startDate ? `${formatDate(flight.startDate)} — ${formatDate(flight.endDate)}` : 'Unscheduled'}
                       </div>
                     </td>
-                    <td className="py-3 px-6">
-                      <div className="flex flex-col gap-1">
+                    <td className="py-3 px-4">
+                      <div className="flex flex-col gap-1 min-w-[220px]">
                         {flight.requestedDateIDtoDZ && (
                           <div className="flex items-center gap-2">
                             <ArrowLeft size={10} className="text-emerald-500" />
-                            <div className="flex flex-col">
-                              <span className="text-[9px] text-slate-300 font-mono tracking-tighter">Indonesia → Algeria ({formatDate(flight.requestedDateIDtoDZ)})</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[11px] text-slate-400 font-mono tracking-tighter">Indonesia-Algeria ({formatDate(flight.requestedDateIDtoDZ)})</span>
                               {(flight.statusIDtoDZ === 'Requested' || flight.statusIDtoDZ === 'Not Requested' || flight.statusIDtoDZ === 'Need Action') && (
-                                <span className="text-[10px] text-slate-500 font-bold uppercase italic -mt-0.5 leading-tight">
-                                  {getDaysUntil(flight.requestedDateIDtoDZ) === 0 ? 'FLIGHT TODAY' : 
-                                   getDaysUntil(flight.requestedDateIDtoDZ) < 0 ? 'PAST DUE' : 
-                                   `${getDaysUntil(flight.requestedDateIDtoDZ)} DAYS REMAINING`}
+                                <span className="text-[9px] text-slate-500 font-bold uppercase whitespace-nowrap">
+                                  {getDaysUntil(flight.requestedDateIDtoDZ) === 0 ? 'TODAY' : 
+                                   getDaysUntil(flight.requestedDateIDtoDZ) < 0 ? 'OVERDUE' : 
+                                   `${getDaysUntil(flight.requestedDateIDtoDZ)}d rem`}
                                 </span>
                               )}
                             </div>
@@ -1194,13 +1151,13 @@ export function Dashboard({ isGuest }: DashboardProps) {
                         {flight.requestedDateDZtoID && (
                           <div className="flex items-center gap-2">
                             <ArrowRight size={10} className="text-blue-500" />
-                            <div className="flex flex-col">
-                              <span className="text-[9px] text-slate-300 font-mono tracking-tighter">Algeria → Indonesia ({formatDate(flight.requestedDateDZtoID)})</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[11px] text-slate-400 font-mono tracking-tighter">Algeria-Indonesia ({formatDate(flight.requestedDateDZtoID)})</span>
                               {(flight.statusDZtoID === 'Requested' || flight.statusDZtoID === 'Not Requested' || flight.statusDZtoID === 'Need Action') && (
-                                <span className="text-[10px] text-slate-500 font-bold uppercase italic -mt-0.5 leading-tight">
-                                  {getDaysUntil(flight.requestedDateDZtoID) === 0 ? 'FLIGHT TODAY' : 
-                                   getDaysUntil(flight.requestedDateDZtoID) < 0 ? 'PAST DUE' : 
-                                   `${getDaysUntil(flight.requestedDateDZtoID)} DAYS REMAINING`}
+                                <span className="text-[9px] text-slate-500 font-bold uppercase whitespace-nowrap">
+                                  {getDaysUntil(flight.requestedDateDZtoID) === 0 ? 'TODAY' : 
+                                   getDaysUntil(flight.requestedDateDZtoID) < 0 ? 'OVERDUE' : 
+                                   `${getDaysUntil(flight.requestedDateDZtoID)}d rem`}
                                 </span>
                               )}
                             </div>
@@ -1208,36 +1165,36 @@ export function Dashboard({ isGuest }: DashboardProps) {
                         )}
                       </div>
                     </td>
-                    <td className="py-3 px-6">
-                      <div className="flex flex-col gap-1">
+                    <td className="py-3 px-4 text-center">
+                      <div className="flex flex-col items-center gap-1.5">
                         {flight.requestedDateIDtoDZ && (
                           <span className={cn(
-                            "text-[8px] font-black uppercase px-1.5 py-0.5 rounded border w-fit group-hover:scale-105 transition-transform",
+                            "text-[9px] font-black uppercase px-2 py-0.5 rounded border w-fit whitespace-nowrap",
                             getEffectiveStatus(flight.statusIDtoDZ || 'Requested', flight.requestedDateIDtoDZ) === 'Need Action'
-                              ? "text-rose-500 bg-rose-500/10 border-rose-500/20 animate-pulse font-bold"
+                              ? "text-rose-500 bg-rose-500/10 border-rose-500/20"
                               : flight.statusIDtoDZ === 'Received'
                                 ? "text-emerald-400 bg-emerald-500/20 border-emerald-500/30"
                                 : "text-emerald-400 bg-emerald-500/5 border-emerald-500/10"
                           )}>
-                            {getStatusLabel(flight.statusIDtoDZ || 'Requested', flight.requestedDateIDtoDZ)} (ID-DZ)
+                            {getStatusLabel(flight.statusIDtoDZ || 'Requested', flight.requestedDateIDtoDZ)}
                           </span>
                         )}
                         {flight.requestedDateDZtoID && (
                           <span className={cn(
-                            "text-[8px] font-black uppercase px-1.5 py-0.5 rounded border w-fit group-hover:scale-105 transition-transform",
+                            "text-[9px] font-black uppercase px-2 py-0.5 rounded border w-fit whitespace-nowrap",
                             getEffectiveStatus(flight.statusDZtoID || 'Requested', flight.requestedDateDZtoID) === 'Need Action'
-                              ? "text-rose-500 bg-rose-500/10 border-rose-500/20 animate-pulse font-bold"
+                              ? "text-rose-500 bg-rose-500/10 border-rose-500/20"
                               : flight.statusDZtoID === 'Received' 
                                 ? "text-blue-400 bg-blue-500/20 border-blue-500/30"
                                 : "text-blue-400 bg-blue-500/5 border-blue-500/10"
                           )}>
-                            {getStatusLabel(flight.statusDZtoID || 'Requested', flight.requestedDateDZtoID)} (DZ-ID)
+                            {getStatusLabel(flight.statusDZtoID || 'Requested', flight.requestedDateDZtoID)}
                           </span>
                         )}
                       </div>
                     </td>
-                    <td className="py-3 px-6 text-right font-mono text-[9px] text-slate-600">
-                      STAMP-{flight.createdAt?.seconds ? new Date(flight.createdAt.seconds * 1000).getHours() + ':' + new Date(flight.createdAt.seconds * 1000).getMinutes() : 'XX:XX'}
+                    <td className="py-3 px-4 text-right font-mono text-[10px] text-slate-700">
+                      ID-{flight.id.slice(0,8).toUpperCase()}
                     </td>
                   </tr>
                 );
