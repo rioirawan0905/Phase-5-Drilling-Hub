@@ -207,12 +207,15 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
       days.push(
         <div 
           key={day} 
-          className="h-28 bg-[#111114] border border-white/5 p-2 overflow-hidden flex flex-col hover:bg-white/[0.02] cursor-pointer group"
+          className={cn(
+            "h-28 bg-[#111114] border border-white/5 p-2 overflow-hidden flex flex-col hover:bg-white/[0.02] transition-colors group",
+            isGuest ? "cursor-default" : "cursor-pointer"
+          )}
           onClick={() => handleOpenAdd(dateStr)}
         >
           <div className="flex items-center justify-between mb-1">
              <span className="text-[10px] font-mono text-slate-500">{day}</span>
-             <Plus size={10} className="text-slate-700 opacity-0 group-hover:opacity-100" />
+             {!isGuest && <Plus size={10} className="text-slate-700 opacity-0 group-hover:opacity-100" />}
           </div>
           <div className="flex-1 space-y-1 overflow-y-auto custom-scrollbar">
             {activeSchedules.map(s => {
@@ -222,9 +225,10 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                   key={s.id} 
                   onClick={(e) => { e.stopPropagation(); handleEdit(s); }}
                   className={cn(
-                    "text-[8px] px-1.5 py-1 rounded-md truncate font-black uppercase tracking-tighter shadow-sm flex items-center gap-1.5 text-white border border-white/10",
+                    "text-[8px] px-1.5 py-1 rounded-md truncate font-black uppercase tracking-tighter shadow-sm flex items-center gap-1.5 text-white border border-white/10 transition-colors",
                     getGroupColor(person?.rosterGroup || ''),
-                    getStatusColor(s.status)
+                    getStatusColor(s.status),
+                    isGuest ? "cursor-default" : "cursor-pointer hover:border-white/30"
                   )}
                 >
                   <span className="w-1.5 h-1.5 rounded-full bg-white/40 shrink-0" />
@@ -268,13 +272,16 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
         {weekDays.map(({ date, dateStr }) => (
           <div 
             key={dateStr} 
-            className="bg-[#111114] border-b border-r border-white/5 flex flex-col hover:bg-white/[0.01] cursor-pointer group"
+            className={cn(
+              "bg-[#111114] border-b border-r border-white/5 flex flex-col hover:bg-white/[0.01] transition-colors group",
+              isGuest ? "cursor-default" : "cursor-pointer"
+            )}
             onClick={() => handleOpenAdd(dateStr)}
           >
             <div className="bg-black/40 py-2 text-center border-b border-white/5 relative">
               <p className="text-[10px] font-bold text-slate-400 uppercase">{date.toLocaleDateString('default', { weekday: 'short' })}</p>
               <p className="text-[14px] font-mono text-white">{date.getDate()}</p>
-              <Plus size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-600 opacity-0 group-hover:opacity-100" />
+              {!isGuest && <Plus size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-600 opacity-0 group-hover:opacity-100" />}
             </div>
             <div className="flex-1 p-2 space-y-2 overflow-y-auto custom-scrollbar">
               {filteredSchedules.filter(s => dateStr >= s.startDate && dateStr <= s.endDate).map(s => {
@@ -284,9 +291,10 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                     key={s.id} 
                     onClick={(e) => { e.stopPropagation(); handleEdit(s); }}
                     className={cn(
-                      "p-2 rounded-lg text-[9px] font-black uppercase tracking-widest text-white shadow-md border border-white/10",
+                      "p-2 rounded-lg text-[9px] font-black uppercase tracking-widest text-white shadow-md border border-white/10 transition-all",
                       getGroupColor(person?.rosterGroup || ''),
-                      getStatusColor(s.status)
+                      getStatusColor(s.status),
+                      isGuest ? "cursor-default" : "cursor-pointer hover:border-white/30"
                     )}
                   >
                     <div className="flex items-center justify-between mb-1">
@@ -314,12 +322,14 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
             <div className="w-48 shrink-0">
               <div className="flex items-center justify-between">
                 <h4 className="text-sm font-bold text-[var(--theme-text)] uppercase tracking-tight">{p.fullName}</h4>
-                <button 
-                  onClick={() => handleOpenAdd(undefined, p.id)}
-                  className="p-1 text-slate-600 hover:text-blue-400 opacity-0 group-hover:opacity-100"
-                >
-                  <Plus size={14} />
-                </button>
+                {!isGuest && (
+                  <button 
+                    onClick={() => handleOpenAdd(undefined, p.id)}
+                    className="p-1 text-slate-600 hover:text-blue-400 opacity-0 group-hover:opacity-100"
+                  >
+                    <Plus size={14} />
+                  </button>
+                )}
               </div>
               <div className="flex items-center gap-2 mt-1">
                  <p className="text-[9px] text-slate-500 uppercase font-mono">{p.title}</p>
@@ -342,7 +352,10 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                   <div 
                     key={s.id} 
                     onClick={() => handleEdit(s)}
-                    className="bg-black/40 border border-white/10 px-4 py-3 rounded-xl shrink-0 min-w-[160px] relative overflow-hidden group/item cursor-pointer hover:border-white/20"
+                    className={cn(
+                      "bg-black/40 border border-white/10 px-4 py-3 rounded-xl shrink-0 min-w-[160px] relative overflow-hidden group/item transition-all",
+                      isGuest ? "cursor-default" : "cursor-pointer hover:border-white/20"
+                    )}
                   >
                     <div className={cn(
                       "absolute left-0 top-0 bottom-0 w-1",
@@ -350,12 +363,14 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                     )} />
                     <div className="flex justify-between items-start mb-2">
                       <p className="text-[8px] font-black text-slate-500 uppercase tracking-[0.2em]">{s.status}</p>
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); handleDelete(s.id); }}
-                        className="text-slate-800 hover:text-rose-500 opacity-0 group-hover/item:opacity-100 mt-[-4px]"
-                      >
-                        <Trash2 size={10} />
-                      </button>
+                      {!isGuest && (
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); handleDelete(s.id); }}
+                          className="text-slate-800 hover:text-rose-500 opacity-0 group-hover/item:opacity-100 mt-[-4px]"
+                        >
+                          <Trash2 size={10} />
+                        </button>
+                      )}
                     </div>
                     <div className="flex flex-col gap-1">
                        <p className="text-[11px] text-white font-mono flex items-center gap-2">

@@ -13,12 +13,12 @@ interface LayoutProps {
 }
 
 export function Layout({ children, user, isGuest, activeTab, onTabChange, onLogout }: LayoutProps) {
-  const navItems = [
+  const navItems = ([
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'personnel', label: 'Crew Roster', icon: Users },
     { id: 'flights', label: 'Ticketing', icon: Plane },
-    { id: 'settings', label: 'Settings', icon: Settings },
-  ] as const;
+    !isGuest && { id: 'settings', label: 'Settings', icon: Settings },
+  ] as const).filter(Boolean) as { id: 'dashboard' | 'personnel' | 'flights' | 'settings', label: string, icon: any }[];
 
   return (
     <div className="h-screen flex flex-col overflow-hidden font-sans transition-colors duration-300" style={{ backgroundColor: 'var(--theme-bg)', color: 'var(--theme-text)' }}>
