@@ -59,6 +59,32 @@ export function FlightsList({ isGuest }: FlightsListProps) {
 
   const selectedPersonnelIds = watchReq('personnelIds') || [];
 
+  const commonSchedules = useMemo(() => {
+    if (selectedPersonnelIds.length === 0) return [];
+    
+    // Get all schedules for all selected personnel
+    const allSelectedSchedules = schedules.filter(s => selectedPersonnelIds.includes(s.personnelId));
+    
+    if (selectedPersonnelIds.length === 1) {
+      return allSelectedSchedules;
+    }
+
+    // Find unique duty periods (startDate + endDate)
+    const uniquePeriods = Array.from(new Set(allSelectedSchedules.map(s => `${s.startDate}|${s.endDate}`)));
+    
+    // Filter periods that are present for ALL selected personnel
+    return (uniquePeriods as string[]).filter(period => {
+      const [start, end] = period.split('|');
+      return selectedPersonnelIds.every(pid => 
+        allSelectedSchedules.some(s => s.personnelId === pid && s.startDate === start && s.endDate === end)
+      );
+    }).map(period => {
+      const [start, end] = (period as string).split('|');
+      // Just return a representative schedule (the first one found) or a virtual one
+      return allSelectedSchedules.find(s => s.startDate === start && s.endDate === end);
+    }).filter(Boolean) as Scheduling[];
+  }, [selectedPersonnelIds, schedules]);
+
   const { register: regSched, handleSubmit: handleSchedSubmit, reset: resetSched, formState: { errors: schedErrors } } = useForm<ScheduleFormData>({
     resolver: zodResolver(scheduleSchema),
     defaultValues: { status: 'ON_DUTY' }
@@ -239,40 +265,40 @@ export function FlightsList({ isGuest }: FlightsListProps) {
   }, [personnel]);
 
   return (
-    <div className="space-y-6 pb-20">
+    <div className="space-y-4 md:space-y-6 pb-20">
       {/* View Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-2">
         <div>
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-white">Flight Ticket Request</h2>
-          <p className="text-[10px] text-slate-500 uppercase tracking-widest mt-0.5">Manifest Terminal</p>
+          <h2 className="text-xs md:text-sm font-semibold uppercase tracking-wider text-white">Flight Ticket Request</h2>
+          <p className="text-[9px] md:text-[10px] text-slate-500 uppercase tracking-widest mt-0.5">Manifest Terminal</p>
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 w-full md:w-auto">
           {!isGuest && (
             <button 
               onClick={() => setIsRequestModalOpen(true)}
-              className="btn-primary"
+              className="btn-primary py-2 px-4 text-[10px] flex-1 md:flex-none justify-center whitespace-nowrap"
             >
-              New Flight Request
+              + New Request
             </button>
           )}
         </div>
       </div>
 
       {/* Filters Bar */}
-      <div className="flex flex-wrap items-center gap-4 p-4 bg-black/20 border border-white/5 rounded-xl">
+      <div className="flex flex-col gap-4 p-3 md:p-4 bg-black/20 border border-white/5 rounded-xl">
         <div className="flex items-center gap-2">
-          <Filter size={14} className="text-slate-500" />
-          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Filters:</span>
+          <Filter size={12} className="text-slate-500" />
+          <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Filters</span>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 flex-1">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 flex-1">
           <div className="space-y-1">
-            <label className="text-[9px] text-slate-500 uppercase font-bold px-1">Month</label>
+            <label className="text-[8px] text-slate-500 uppercase font-bold px-1">Month</label>
             <select 
               value={filterMonth}
               onChange={(e) => setFilterMonth(e.target.value)}
-              className="w-full bg-[#111114] border border-white/5 px-3 py-1.5 text-[10px] text-slate-300 rounded-lg focus:outline-none"
+              className="w-full bg-[#111114] border border-white/5 px-2 md:px-3 py-1.5 text-[9px] md:text-[10px] text-slate-300 rounded-lg focus:outline-none"
             >
               <option value="ALL">ALL MONTHS</option>
               {[
@@ -287,11 +313,11 @@ export function FlightsList({ isGuest }: FlightsListProps) {
           </div>
 
           <div className="space-y-1">
-            <label className="text-[9px] text-slate-500 uppercase font-bold px-1">Year</label>
+            <label className="text-[8px] text-slate-500 uppercase font-bold px-1">Year</label>
             <select 
               value={filterYear}
               onChange={(e) => setFilterYear(e.target.value)}
-              className="w-full bg-[#111114] border border-white/5 px-3 py-1.5 text-[10px] text-slate-300 rounded-lg focus:outline-none"
+              className="w-full bg-[#111114] border border-white/5 px-2 md:px-3 py-1.5 text-[9px] md:text-[10px] text-slate-300 rounded-lg focus:outline-none"
             >
               <option value="ALL">ALL YEARS</option>
               <option value="2024">2024</option>
@@ -301,11 +327,11 @@ export function FlightsList({ isGuest }: FlightsListProps) {
           </div>
 
           <div className="space-y-1">
-            <label className="text-[9px] text-slate-500 uppercase font-bold px-1">Group</label>
+            <label className="text-[8px] text-slate-500 uppercase font-bold px-1">Group</label>
             <select 
               value={filterGroup}
               onChange={(e) => setFilterGroup(e.target.value)}
-              className="w-full bg-[#111114] border border-white/5 px-3 py-1.5 text-[10px] text-slate-300 rounded-lg focus:outline-none"
+              className="w-full bg-[#111114] border border-white/5 px-2 md:px-3 py-1.5 text-[9px] md:text-[10px] text-slate-300 rounded-lg focus:outline-none"
             >
               <option value="ALL">ALL GROUPS</option>
               {uniqueGroups.map(g => (
@@ -315,11 +341,11 @@ export function FlightsList({ isGuest }: FlightsListProps) {
           </div>
 
           <div className="space-y-1">
-            <label className="text-[9px] text-slate-500 uppercase font-bold px-1">Personnel</label>
+            <label className="text-[8px] text-slate-500 uppercase font-bold px-1">Personnel</label>
             <select 
               value={filterPersonnel}
               onChange={(e) => setFilterPersonnel(e.target.value)}
-              className="w-full bg-[#111114] border border-white/5 px-3 py-1.5 text-[10px] text-slate-300 rounded-lg focus:outline-none"
+              className="w-full bg-[#111114] border border-white/5 px-2 md:px-3 py-1.5 text-[9px] md:text-[10px] text-slate-300 rounded-lg focus:outline-none"
             >
               <option value="ALL">ALL PERSONNEL</option>
               {personnel.sort((a,b) => a.fullName.localeCompare(b.fullName)).map(p => (
@@ -359,32 +385,36 @@ export function FlightsList({ isGuest }: FlightsListProps) {
                       <p className="font-semibold text-white">{person?.fullName || 'UNKNOWN'}</p>
                       <p className="text-[10px] text-slate-500 font-mono italic">{person?.title || 'No Title'}</p>
                     </td>
-                    <td className="py-4 px-6 text-slate-400 font-mono">
-                      {f.startDate ? `${f.startDate} — ${f.endDate}` : 'N/A'}
+                    <td className="py-4 px-6 text-slate-400 font-mono whitespace-nowrap">
+                      {f.startDate ? `${formatDate(f.startDate)} — ${formatDate(f.endDate)}` : 'N/A'}
                     </td>
                     <td className="py-4 px-6" colSpan={3}>
                       <div className="space-y-4">
-                        {f.requestedDateDZtoID && (
-                          <div className="flex items-center justify-between p-2 rounded bg-blue-500/5 border border-blue-500/10">
+                        {f.requestedDateIDtoDZ && (
+                          <div className="flex items-center justify-between p-2 rounded bg-emerald-500/5 border border-emerald-500/10">
                             <div className="flex items-center gap-3">
-                              <ArrowRight size={12} className="text-blue-400" />
+                              <ArrowLeft size={12} className="text-emerald-400" />
                               <div>
-                                <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Algeria → Indonesia</p>
-                                <p className="text-[11px] text-white font-mono">{f.requestedDateDZtoID}</p>
+                                <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Indonesia → Algeria</p>
+                                <p className="text-[11px] text-white font-mono">{formatDate(f.requestedDateIDtoDZ)}</p>
                               </div>
                             </div>
                             <div className="flex items-center gap-4">
                               <span className={cn(
                                 "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter border",
-                                getStatusStyle(f.statusDZtoID || 'Requested', f.requestedDateDZtoID)
+                                getStatusLabel(f.statusIDtoDZ || 'Requested', f.requestedDateIDtoDZ) === 'Need Action'
+                                  ? "bg-rose-500/20 text-rose-500 border-rose-500/30 animate-pulse font-bold"
+                                  : f.statusIDtoDZ === 'Received'
+                                    ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                                    : "bg-emerald-500/5 text-emerald-400 border-emerald-500/10"
                               )}>
-                                {getStatusLabel(f.statusDZtoID || 'Requested', f.requestedDateDZtoID)}
+                                {getStatusLabel(f.statusIDtoDZ || 'Requested', f.requestedDateIDtoDZ)}
                               </span>
                               {!isGuest ? (
                                 <select 
-                                  onChange={(e) => updateTransitStatus(f.id, 'DZtoID', e.target.value as FlightStatus)}
-                                  value={f.statusDZtoID || 'Requested'}
-                                  className="bg-black/40 border border-white/5 text-[9px] text-slate-400 px-2 py-1 rounded focus:outline-none focus:border-blue-500/30 font-bold uppercase"
+                                  onChange={(e) => updateTransitStatus(f.id, 'IDtoDZ', e.target.value as FlightStatus)}
+                                  value={f.statusIDtoDZ || 'Requested'}
+                                  className="bg-black/40 border border-white/5 text-[9px] text-slate-400 px-2 py-1 rounded focus:outline-none focus:border-emerald-500/30 font-bold uppercase"
                                 >
                                   <option value="Not Requested">Not Requested</option>
                                   <option value="Requested">Requested</option>
@@ -396,27 +426,31 @@ export function FlightsList({ isGuest }: FlightsListProps) {
                             </div>
                           </div>
                         )}
-                        {f.requestedDateIDtoDZ && (
-                          <div className="flex items-center justify-between p-2 rounded bg-emerald-500/5 border border-emerald-500/10">
+                        {f.requestedDateDZtoID && (
+                          <div className="flex items-center justify-between p-2 rounded bg-blue-500/5 border border-blue-500/10">
                             <div className="flex items-center gap-3">
-                              <ArrowLeft size={12} className="text-emerald-400" />
+                              <ArrowRight size={12} className="text-blue-400" />
                               <div>
-                                <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Indonesia → Algeria</p>
-                                <p className="text-[11px] text-white font-mono">{f.requestedDateIDtoDZ}</p>
+                                <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Algeria → Indonesia</p>
+                                <p className="text-[11px] text-white font-mono">{formatDate(f.requestedDateDZtoID)}</p>
                               </div>
                             </div>
                             <div className="flex items-center gap-4">
                               <span className={cn(
                                 "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter border",
-                                getStatusStyle(f.statusIDtoDZ || 'Requested', f.requestedDateIDtoDZ)
+                                getStatusLabel(f.statusDZtoID || 'Requested', f.requestedDateDZtoID) === 'Need Action'
+                                  ? "bg-rose-500/20 text-rose-500 border-rose-500/30 animate-pulse font-bold"
+                                  : f.statusDZtoID === 'Received'
+                                    ? "bg-blue-500/20 text-blue-400 border-blue-500/30"
+                                    : "bg-blue-500/5 text-blue-400 border-blue-500/10"
                               )}>
-                                {getStatusLabel(f.statusIDtoDZ || 'Requested', f.requestedDateIDtoDZ)}
+                                {getStatusLabel(f.statusDZtoID || 'Requested', f.requestedDateDZtoID)}
                               </span>
                               {!isGuest ? (
                                 <select 
-                                  onChange={(e) => updateTransitStatus(f.id, 'IDtoDZ', e.target.value as FlightStatus)}
-                                  value={f.statusIDtoDZ || 'Requested'}
-                                  className="bg-black/40 border border-white/5 text-[9px] text-slate-400 px-2 py-1 rounded focus:outline-none focus:border-emerald-500/30 font-bold uppercase"
+                                  onChange={(e) => updateTransitStatus(f.id, 'DZtoID', e.target.value as FlightStatus)}
+                                  value={f.statusDZtoID || 'Requested'}
+                                  className="bg-black/40 border border-white/5 text-[9px] text-slate-400 px-2 py-1 rounded focus:outline-none focus:border-blue-500/30 font-bold uppercase"
                                 >
                                   <option value="Not Requested">Not Requested</option>
                                   <option value="Requested">Requested</option>
@@ -494,16 +528,24 @@ export function FlightsList({ isGuest }: FlightsListProps) {
                       {...regRequest('schedulingId')} 
                       className="w-full bg-[#16161a] border border-white/5 px-4 py-2.5 text-sm text-slate-300 rounded-lg focus:outline-none"
                       onChange={(e) => {
-                        const sched = schedules.find(s => s.id === e.target.value);
-                        if (sched) {
-                          setReqValue('startDate', sched.startDate);
-                          setReqValue('endDate', sched.endDate);
+                        const val = e.target.value;
+                        if (val.includes('|')) {
+                          const [start, end] = val.split('|');
+                          setReqValue('startDate', start);
+                          setReqValue('endDate', end);
+                        } else {
+                          // Handle single ID if it survived (though we changed it to start|end above)
+                          const sched = schedules.find(s => s.id === val);
+                          if (sched) {
+                            setReqValue('startDate', sched.startDate);
+                            setReqValue('endDate', sched.endDate);
+                          }
                         }
                       }}
                     >
                       <option value="">Manual Entry or Select Period...</option>
-                      {selectedPersonnelIds.length === 1 && schedules.filter(s => s.personnelId === selectedPersonnelIds[0]).map(s => (
-                        <option key={s.id} value={s.id}>{s.startDate} to {s.endDate} ({s.status})</option>
+                      {commonSchedules.map(s => (
+                        <option key={s.id} value={`${s.startDate}|${s.endDate}`}>{formatDate(s.startDate)} to {formatDate(s.endDate)}</option>
                       ))}
                     </select>
                   </div>
@@ -522,12 +564,12 @@ export function FlightsList({ isGuest }: FlightsListProps) {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="text-[10px] text-slate-500 uppercase font-bold px-1">Ticket: DZ → ID</label>
-                    <input type="date" {...regRequest('requestedDateDZtoID')} className="w-full bg-[#16161a] border border-white/5 px-4 py-2.5 text-sm text-slate-300 rounded-lg focus:outline-none focus:border-blue-500/30" />
-                  </div>
-                  <div className="space-y-1">
                     <label className="text-[10px] text-slate-500 uppercase font-bold px-1">Ticket: ID → DZ</label>
                     <input type="date" {...regRequest('requestedDateIDtoDZ')} className="w-full bg-[#16161a] border border-white/5 px-4 py-2.5 text-sm text-slate-300 rounded-lg focus:outline-none focus:border-emerald-500/30" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-slate-500 uppercase font-bold px-1">Ticket: DZ → ID</label>
+                    <input type="date" {...regRequest('requestedDateDZtoID')} className="w-full bg-[#16161a] border border-white/5 px-4 py-2.5 text-sm text-slate-300 rounded-lg focus:outline-none focus:border-blue-500/30" />
                   </div>
                 </div>
                 {reqErrors.requestedDateDZtoID && <p className="text-[10px] text-rose-500 px-1">{reqErrors.requestedDateDZtoID.message}</p>}

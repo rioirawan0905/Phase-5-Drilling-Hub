@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot, query, addDoc, updateDoc, doc, deleteDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Personnel, Scheduling, ScheduleStatus } from '../types';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Users, Clock, LayoutGrid, Plus, Trash2, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { cn } from '../lib/utils';
+import { cn, formatDate } from '../lib/utils';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -32,6 +32,8 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState<Scheduling | null>(null);
   const [sortBy, setSortBy] = useState<'name' | 'group'>('name');
+  const [filterGroup, setFilterGroup] = useState<string>('ALL');
+  const [filterPersonnel, setFilterPersonnel] = useState<string>('ALL');
 
   const groupColors: Record<string, string> = {
     'A': 'bg-blue-600',
@@ -54,11 +56,29 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
     return 'opacity-40 grayscale';
   };
 
-  const sortedPersonnel = [...personnel].sort((a, b) => {
+  const sortedPersonnel = [...personnel]
+    .filter(p => {
+      if (filterGroup !== 'ALL' && p.rosterGroup !== filterGroup) return false;
+      if (filterPersonnel !== 'ALL' && p.id !== filterPersonnel) return false;
+      return true;
+    })
+    .sort((a, b) => {
     if (sortBy === 'name') return a.fullName.localeCompare(b.fullName);
     if (sortBy === 'group') return a.rosterGroup.localeCompare(b.rosterGroup);
     return 0;
   });
+
+  const filteredSchedules = useMemo(() => {
+    return schedules.filter(s => {
+      const p = personnel.find(person => person.id === s.personnelId);
+      if (!p) return false;
+      if (filterGroup !== 'ALL' && p.rosterGroup !== filterGroup) return false;
+      if (filterPersonnel !== 'ALL' && p.id !== filterPersonnel) return false;
+      return true;
+    });
+  }, [schedules, personnel, filterGroup, filterPersonnel]);
+
+  const uniqueGroups = useMemo(() => [...new Set(personnel.map(p => p.rosterGroup))].sort(), [personnel]);
 
   const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<ScheduleFormData>({
     resolver: zodResolver(scheduleSchema),
@@ -178,7 +198,7 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
 
     for (let day = 1; day <= totalDays; day++) {
       const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-      const activeSchedules = schedules.filter(s => {
+      const activeSchedules = filteredSchedules.filter(s => {
         const start = s.startDate;
         const end = s.endDate;
         return dateStr >= start && dateStr <= end;
@@ -257,7 +277,7 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
               <Plus size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-600 opacity-0 group-hover:opacity-100" />
             </div>
             <div className="flex-1 p-2 space-y-2 overflow-y-auto custom-scrollbar">
-              {schedules.filter(s => dateStr >= s.startDate && dateStr <= s.endDate).map(s => {
+              {filteredSchedules.filter(s => dateStr >= s.startDate && dateStr <= s.endDate).map(s => {
                 const person = personnel.find(p => p.id === s.personnelId);
                 return (
                   <div 
@@ -273,7 +293,7 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                       <span>{person?.fullName || 'Crew'}</span>
                       <span className="text-[7px] bg-white/20 px-1 rounded">{s.status}</span>
                     </div>
-                    <p className="text-[7px] opacity-70 font-mono">{s.startDate.split('-').slice(1).join('/')} - {s.endDate.split('-').slice(1).join('/')}</p>
+                    <p className="text-[7px] opacity-70 font-mono italic">{formatDate(s.startDate)} - {formatDate(s.endDate)}</p>
                   </div>
                 );
               })}
@@ -288,7 +308,7 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
   const renderPersonnelView = () => (
     <div className="space-y-4 max-h-[700px] overflow-y-auto custom-scrollbar pr-2">
       {sortedPersonnel.map(p => {
-        const pSchedules = schedules.filter(s => s.personnelId === p.id).sort((a,b) => a.startDate.localeCompare(b.startDate));
+        const pSchedules = filteredSchedules.filter(s => s.personnelId === p.id).sort((a,b) => a.startDate.localeCompare(b.startDate));
         return (
           <div key={p.id} className="theme-card p-4 flex flex-col md:flex-row gap-6 items-start md:items-center group">
             <div className="w-48 shrink-0">
@@ -339,10 +359,10 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                     </div>
                     <div className="flex flex-col gap-1">
                        <p className="text-[11px] text-white font-mono flex items-center gap-2">
-                         <span className="text-slate-600 text-[9px] font-bold">START:</span> {s.startDate}
+                         <span className="text-slate-600 text-[9px] font-bold">START:</span> {formatDate(s.startDate)}
                        </p>
                        <p className="text-[11px] text-white font-mono flex items-center gap-2 border-t border-white/5 pt-1 mt-1">
-                         <span className="text-slate-600 text-[9px] font-bold">END:</span> {s.endDate}
+                         <span className="text-slate-600 text-[9px] font-bold">END:</span> {formatDate(s.endDate)}
                        </p>
                     </div>
                   </div>
@@ -420,7 +440,7 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                   )}>{p.rosterGroup}</p>
                 </div>
                 <div className="flex-1 relative flex h-12 items-center">
-                  {schedules.filter(s => s.personnelId === p.id).map(s => {
+                  {filteredSchedules.filter(s => s.personnelId === p.id).map(s => {
                     const findIndex = (dateStr: string) => timelineDates.findIndex(td => td.dateStr === dateStr);
                     let startIdx = findIndex(s.startDate);
                     let endIdx = findIndex(s.endDate);
@@ -499,6 +519,30 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
           </div>
 
           <div className="flex items-center gap-2 md:gap-4 shrink-0">
+            <div className="hidden md:flex items-center gap-3 px-4 py-2 bg-black/40 border border-white/5 rounded-xl">
+               <span className="text-[10px] font-black text-slate-500 uppercase">Group</span>
+               <select 
+                 value={filterGroup} 
+                 onChange={(e) => setFilterGroup(e.target.value)}
+                 className="bg-transparent text-white text-[11px] font-bold uppercase focus:outline-none cursor-pointer max-w-[80px]"
+               >
+                 <option value="ALL">ALL</option>
+                 {uniqueGroups.map(g => <option key={g} value={g}>{g}</option>)}
+               </select>
+            </div>
+            <div className="hidden md:flex items-center gap-3 px-4 py-2 bg-black/40 border border-white/5 rounded-xl">
+               <span className="text-[10px] font-black text-slate-500 uppercase">Staff</span>
+               <select 
+                 value={filterPersonnel} 
+                 onChange={(e) => setFilterPersonnel(e.target.value)}
+                 className="bg-transparent text-white text-[11px] font-bold uppercase focus:outline-none cursor-pointer max-w-[100px]"
+               >
+                 <option value="ALL">ALL</option>
+                 {personnel.sort((a,b) => a.fullName.localeCompare(b.fullName)).map(p => (
+                   <option key={p.id} value={p.id}>{p.fullName}</option>
+                 ))}
+               </select>
+            </div>
             <div className="hidden md:flex items-center gap-3 px-4 py-2 bg-black/40 border border-white/5 rounded-xl">
                <span className="text-[10px] font-black text-slate-500 uppercase">Sort</span>
                <select 

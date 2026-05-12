@@ -99,50 +99,50 @@ export function PersonnelList({ isGuest }: PersonnelListProps) {
           <p className="text-[10px] text-slate-500 uppercase tracking-widest mt-0.5">Crew Roster Management</p>
         </div>
         
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="flex bg-[#111114] border border-white/10 p-1.5 rounded-xl shadow-inner group">
+        <div className="flex flex-wrap items-center gap-3 md:gap-4 w-full md:w-auto">
+          <div className="flex bg-[#111114] border border-white/10 p-1 md:p-1.5 rounded-xl shadow-inner group flex-1 md:flex-none overflow-x-auto no-scrollbar">
             <button 
               onClick={() => setViewType('grid')}
               className={cn(
-                "flex items-center gap-2 px-5 py-2.5 rounded-lg transition-all text-[11px] font-black uppercase tracking-widest", 
+                "flex items-center justify-center gap-2 px-3 md:px-5 py-2 md:py-2.5 rounded-lg transition-all text-[9px] md:text-[11px] font-black uppercase tracking-widest whitespace-nowrap flex-1 md:flex-none", 
                 viewType === 'grid' 
                   ? "bg-blue-600 text-white shadow-lg shadow-blue-900/40" 
                   : "text-slate-500 hover:text-slate-300 hover:bg-white/5"
               )}
             >
-              <LayoutGrid size={16} />
-              <span>Drilling Crews</span>
+              <LayoutGrid size={14} className="md:w-[16px] md:h-[16px]" />
+              <span>Crews</span>
             </button>
             <button 
               onClick={() => setViewType('calendar')}
               className={cn(
-                "flex items-center gap-2 px-5 py-2.5 rounded-lg transition-all text-[11px] font-black uppercase tracking-widest", 
+                "flex items-center justify-center gap-2 px-3 md:px-5 py-2 md:py-2.5 rounded-lg transition-all text-[9px] md:text-[11px] font-black uppercase tracking-widest whitespace-nowrap flex-1 md:flex-none", 
                 viewType === 'calendar' 
                   ? "bg-blue-600 text-white shadow-lg shadow-blue-900/40" 
                   : "text-slate-500 hover:text-slate-300 hover:bg-white/5"
               )}
             >
-              <CalendarIcon size={16} />
-              <span>Schedule</span>
+              <CalendarIcon size={14} className="md:w-[16px] md:h-[16px]" />
+              <span>Sched</span>
             </button>
           </div>
 
-          <div className="relative">
+          <div className="relative flex-1 md:flex-none min-w-[150px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
             <input 
               type="text" 
-              placeholder="SEARCH CREW..."
+              placeholder="SEARCH..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="bg-[#111114] border border-white/5 pl-9 pr-4 py-2 text-[10px] font-mono text-slate-400 placeholder:text-slate-600 focus:outline-none focus:border-blue-500/50 w-64 transition-all rounded-lg"
+              className="bg-[#111114] border border-white/5 pl-9 pr-4 py-2 text-[10px] font-mono text-slate-400 placeholder:text-slate-600 focus:outline-none focus:border-blue-500/50 w-full md:w-64 transition-all rounded-lg"
             />
           </div>
           {!isGuest && (
             <button 
               onClick={() => setIsModalOpen(true)}
-              className="btn-primary"
+              className="btn-primary py-2 px-4 text-[10px] whitespace-nowrap flex-1 md:flex-none justify-center"
             >
-              Add Crew Member
+              + Crew
             </button>
           )}
         </div>
