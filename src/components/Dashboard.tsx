@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot, query } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { FlightRequest, Personnel, Scheduling, HubEvent } from '../types';
-import { PieChart, Pie, Tooltip as RechartsTooltip, ResponsiveContainer, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, AreaChart, Area } from 'recharts';
+import { PieChart, Pie, Tooltip as RechartsTooltip, ResponsiveContainer, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, AreaChart, Area, LabelList } from 'recharts';
 import { Users, Plane, Activity, CheckCircle2, AlertCircle, Clock, Filter, Calendar, Briefcase, LayoutGrid, ArrowRight, ArrowLeft, Download, Info, Globe, Sun, Cloud, CloudRain, CloudSnow, CloudLightning, CloudDrizzle, CloudFog, Wind, Tag, Palmtree, Wrench } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn, formatDate } from '../lib/utils';
@@ -11,6 +11,15 @@ import * as XLSX from 'xlsx';
 interface DashboardProps {
   isGuest?: boolean;
 }
+
+// Robust date parser for various formats (string, Firestore Timestamp, etc)
+const toDate = (d: any) => {
+  if (!d) return null;
+  if (typeof d === 'string') return new Date(d);
+  if (d.toDate && typeof d.toDate === 'function') return d.toDate();
+  if (d.seconds) return new Date(d.seconds * 1000);
+  return new Date(d);
+};
 
 export function Dashboard({ isGuest }: DashboardProps) {
   const [stats, setStats] = useState({
@@ -164,9 +173,14 @@ export function Dashboard({ isGuest }: DashboardProps) {
       const now = new Date();
       now.setHours(0,0,0,0);
       const onDuty = sData.filter(s => {
-        const start = new Date(s.startDate);
-        const end = new Date(s.endDate);
-        return s.status === 'ON_DUTY' && now >= start && now <= end;
+        const start = toDate(s.startDate);
+        const end = toDate(s.endDate);
+        if (!start || !end || isNaN(start.getTime()) || isNaN(end.getTime())) return false;
+        
+        const startTime = new Date(start).setHours(0,0,0,0);
+        const endTime = new Date(end).setHours(0,0,0,0);
+        const status = (s.status || '').toString().toUpperCase();
+        return status === 'ON_DUTY' && now.getTime() >= startTime && now.getTime() <= endTime;
       }).length;
 
       setStats(prev => ({ 
@@ -239,7 +253,7 @@ export function Dashboard({ isGuest }: DashboardProps) {
       flightsUnsub();
       eventsUnsub();
     };
-  }, [stats.totalPersonnel]);
+  }, []); // Fix: Empty dependency array as listeners are live and don't need re-subscription on stat change
 
   // Derived Labor Data
   const getStatusLabel = (status: string, requestedDate?: string | null) => {
@@ -281,55 +295,65 @@ export function Dashboard({ isGuest }: DashboardProps) {
     );
   };
 
+  // --- NEW LABOR ANALYTICS ENGINE ---
   const laborAnalytics = useMemo(() => {
-    let filteredSchedules = schedules;
+    // 1. Filter schedules to ON_DUTY only
+    let activeDutySchedules = schedules.filter(s => {
+      const status = (s.status || '').toString().toUpperCase();
+      return status === 'ON_DUTY' || status === 'ON-DUTY'; // Handle both formats
+    });
 
-    // Apply Filters
-    if (selectedPersonnel !== 'ALL') {
-      filteredSchedules = filteredSchedules.filter(s => s.personnelId === selectedPersonnel);
-    }
-
-    if (selectedGroup !== 'ALL') {
-      const personnelInGroup = personnel.filter(p => p.rosterGroup === selectedGroup).map(p => p.id);
-      filteredSchedules = filteredSchedules.filter(s => personnelInGroup.includes(s.personnelId));
-    }
-
+    // 2. Filter by period if any selected
     if (selectedPeriods.length > 0) {
-      filteredSchedules = filteredSchedules.filter(s => {
-        const start = s.startDate.substring(0, 7); // YYYY-MM
-        const end = s.endDate.substring(0, 7);
-        return selectedPeriods.includes(start) || selectedPeriods.includes(end);
+      activeDutySchedules = activeDutySchedules.filter(s => {
+        const start = toDate(s.startDate);
+        const end = toDate(s.endDate);
+        if (!start || !end || isNaN(start.getTime())) return false;
+        
+        const sMonth = start.toISOString().substring(0, 7);
+        const eMonth = end.toISOString().substring(0, 7);
+        
+        // Match if selected month is within schedule range
+        return selectedPeriods.some(p => p >= sMonth && p <= eMonth);
       });
     }
 
-    // Calculate Hours
+    // 3. Aggregate hours
+    const hoursPerPerson: Record<string, number> = {};
     let totalHoursCount = 0;
-    const personnelHoursMap: Record<string, number> = {};
 
-    filteredSchedules.forEach(s => {
-      if (s.status === 'ON_DUTY') {
-        const start = new Date(s.startDate);
-        const end = new Date(s.endDate);
-        const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-        const hours = days * 12;
-        
-        totalHoursCount += hours;
-        personnelHoursMap[s.personnelId] = (personnelHoursMap[s.personnelId] || 0) + hours;
-      }
+    activeDutySchedules.forEach(s => {
+      const start = toDate(s.startDate);
+      const end = toDate(s.endDate);
+      if (!start || !end) return;
+
+      // Calculate days (inclusive)
+      const d1 = new Date(start).setHours(0,0,0,0);
+      const d2 = new Date(end).setHours(0,0,0,0);
+      const diffDays = Math.floor(Math.abs(d2 - d1) / (1000 * 60 * 60 * 24)) + 1;
+      const hours = diffDays * 12;
+
+      hoursPerPerson[s.personnelId] = (hoursPerPerson[s.personnelId] || 0) + hours;
+      totalHoursCount += hours;
     });
 
-    const cData = Object.entries(personnelHoursMap)
-      .map(([id, hours]) => {
-        const p = personnel.find(p => p.id === id);
-        return {
-          name: p?.fullName || 'Unknown',
-          hours,
-          group: p?.rosterGroup || 'A'
-        };
+    // 4. Construct chart data
+    const chartData = personnel
+      .filter(p => {
+        const matchesGroup = selectedGroup === 'ALL' || p.rosterGroup === selectedGroup;
+        const matchesPerson = selectedPersonnel === 'ALL' || p.id === selectedPersonnel;
+        const hasHours = (hoursPerPerson[p.id] || 0) > 0;
+        return matchesGroup && matchesPerson && hasHours;
       })
+      .map(p => ({
+        id: p.id,
+        name: p.fullName || 'Unknown',
+        hours: hoursPerPerson[p.id] || 0,
+        group: p.rosterGroup || 'A'
+      }))
       .sort((a, b) => b.hours - a.hours);
 
-    return { totalHours: totalHoursCount, chartData: cData };
+    return { totalHours: totalHoursCount, chartData };
   }, [schedules, personnel, selectedPersonnel, selectedGroup, selectedPeriods]);
 
   const filteredSummaryFlights = useMemo(() => {
@@ -381,12 +405,14 @@ export function Dashboard({ isGuest }: DashboardProps) {
     'Pending': '#64748b',
   };
 
-  const uniqueGroups = useMemo(() => [...new Set(personnel.map(p => p.rosterGroup))], [personnel]);
+  const uniqueGroups = useMemo(() => [...new Set(personnel.map(p => p.rosterGroup).filter(Boolean))].sort(), [personnel]);
   const availableMonths = useMemo(() => {
     const months = new Set<string>();
     schedules.forEach(s => {
-      months.add(s.startDate.substring(0, 7));
-      months.add(s.endDate.substring(0, 7));
+      const start = toDate(s.startDate);
+      const end = toDate(s.endDate);
+      if (start && !isNaN(start.getTime())) months.add(start.toISOString().substring(0, 7));
+      if (end && !isNaN(end.getTime())) months.add(end.toISOString().substring(0, 7));
     });
     return Array.from(months).sort().reverse();
   }, [schedules]);
@@ -744,99 +770,167 @@ export function Dashboard({ isGuest }: DashboardProps) {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Labor Analytics Component */}
-        <div className="lg:col-span-2 theme-container p-4 md:p-6 bg-white/[0.01]">
-          <div className="flex flex-col sm:flex-row justify-between gap-4 md:gap-6 mb-6">
-            <div>
-              <h3 className="text-[10px] md:text-xs font-bold text-white uppercase tracking-widest">Labor Analytics</h3>
-              <p className="text-[8px] md:text-[9px] text-slate-500 uppercase mt-0.5">Est. Hours: (Days On-Duty × 12h)</p>
-            </div>
-            
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center gap-2 px-2 py-1 bg-black/40 border border-white/5 rounded text-[8px] md:text-[9px]">
-                <Users size={10} className="text-slate-500" />
-                <select 
-                  value={selectedGroup} 
-                  onChange={(e) => setSelectedGroup(e.target.value)}
-                  className="bg-transparent text-slate-300 focus:outline-none uppercase font-bold"
-                >
-                  <option value="ALL">Group: ALL</option>
-                  {uniqueGroups.map(g => <option key={g} value={g}>{g}</option>)}
-                </select>
+        {/* --- LABOR ANALYTICS SECTION --- */}
+        <div className="lg:col-span-2 theme-container p-6 bg-[#0a0a0c] border border-white/5 relative overflow-hidden group">
+          {/* Subtle Background Glow */}
+          <div className="absolute -top-24 -left-24 w-64 h-64 bg-blue-500/5 rounded-full blur-[100px] pointer-events-none" />
+          
+          <div className="relative z-10">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <Activity size={14} className="text-blue-500" />
+                  <h3 className="text-xs font-black text-white uppercase tracking-[0.2em]">Labor Force Profile</h3>
+                </div>
+                <p className="text-[10px] text-slate-500 uppercase font-bold">Personnel Deployment vs Cumulative Work Hours (12h/Day)</p>
               </div>
-              <div className="flex items-center gap-2 px-2 py-1 bg-black/40 border border-white/5 rounded text-[8px] md:text-[9px] relative group/select">
-                <Calendar size={10} className="text-slate-500" />
-                <button className="bg-transparent text-slate-300 focus:outline-none uppercase font-bold min-w-[70px] text-left">
-                  {selectedPeriods.length === 0 ? 'All Periods' : 
-                   selectedPeriods.length === 1 ? formatPeriod(selectedPeriods[0]) :
-                   `${selectedPeriods.length} Mo`}
-                </button>
-                <div className="absolute top-full left-0 mt-1 w-40 max-h-52 overflow-y-auto bg-[#16161a] border border-white/10 rounded-lg shadow-2xl z-50 hidden group-hover/select:block custom-scrollbar">
-                  <div 
-                    onClick={() => togglePeriod('ALL')}
-                    className={cn(
-                      "px-3 py-1.5 text-[9px] uppercase font-bold transition-colors cursor-pointer",
-                      selectedPeriods.length === 0 ? "text-blue-500 bg-blue-500/5" : "text-slate-400 hover:text-white"
-                    )}
+              
+              <div className="flex items-center gap-3">
+                {/* Group Filter */}
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-white/[0.03] border border-white/10 rounded-lg group/filter hover:bg-white/[0.05] transition-colors">
+                  <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">GP:</span>
+                  <select 
+                    value={selectedGroup} 
+                    onChange={(e) => setSelectedGroup(e.target.value)}
+                    className="bg-transparent text-[10px] font-black text-white focus:outline-none uppercase cursor-pointer"
                   >
-                    All Periods
-                  </div>
-                  {availableMonths.map(m => (
-                    <div 
-                      key={m}
-                      onClick={() => togglePeriod(m)}
-                      className={cn(
-                        "px-3 py-1.5 text-[9px] uppercase font-bold transition-colors cursor-pointer flex justify-between items-center",
-                        selectedPeriods.includes(m) ? "text-blue-500 bg-blue-500/5" : "text-slate-400 hover:text-white"
-                      )}
-                    >
-                      {formatPeriod(m)}
-                      {selectedPeriods.includes(m) && <CheckCircle2 size={10} />}
+                    <option value="ALL">ALL</option>
+                    {uniqueGroups.map(g => <option key={g} value={g} className="bg-[#111]">{g}</option>)}
+                  </select>
+                </div>
+
+                {/* Period Selector */}
+                <div className="relative group/period">
+                  <button className="flex items-center gap-2 px-3 py-1.5 bg-white/[0.03] border border-white/10 rounded-lg hover:bg-white/[0.05] transition-all">
+                    <Calendar size={12} className="text-slate-400" />
+                    <span className="text-[10px] font-black text-white uppercase tracking-widest">
+                      {selectedPeriods.length === 0 ? 'LIFETIME' : `${selectedPeriods.length} MONTHS`}
+                    </span>
+                  </button>
+                  <div className="absolute top-full right-0 mt-2 w-48 bg-[#0d0d0f] border border-white/10 rounded-xl shadow-2xl opacity-0 translate-y-2 pointer-events-none group-hover/period:opacity-100 group-hover/period:translate-y-0 group-hover/period:pointer-events-auto transition-all z-50 overflow-hidden">
+                    <div className="p-2 border-b border-white/5 bg-white/[0.02]">
+                      <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest px-2">Select Active Periods</p>
                     </div>
-                  ))}
+                    <div className="max-h-60 overflow-y-auto custom-scrollbar">
+                      <div 
+                        onClick={() => setSelectedPeriods([])}
+                        className={cn(
+                          "px-4 py-2 text-[10px] font-bold uppercase cursor-pointer transition-colors hover:bg-white/5",
+                          selectedPeriods.length === 0 ? "text-blue-500 bg-blue-500/5" : "text-slate-400"
+                        )}
+                      >
+                        Reset All
+                      </div>
+                      {availableMonths.map(m => (
+                        <div 
+                          key={m}
+                          onClick={() => togglePeriod(m)}
+                          className={cn(
+                            "px-4 py-2 text-[10px] font-bold uppercase cursor-pointer flex justify-between items-center hover:bg-white/5 transition-colors",
+                            selectedPeriods.includes(m) ? "text-blue-500 bg-blue-500/5 text-shadow-glow" : "text-slate-400"
+                          )}
+                        >
+                          {formatPeriod(m)}
+                          {selectedPeriods.includes(m) && <CheckCircle2 size={10} className="text-blue-500" />}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          <div className="flex flex-col md:flex-row gap-6">
-            <div className="flex-1 min-h-[220px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={laborAnalytics.chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" vertical={false} />
-                  <XAxis 
-                    dataKey="name" 
-                    stroke="rgba(255,255,255,0.2)" 
-                    fontSize={10} 
-                    fontWeight="bold" 
-                    tickLine={false} 
-                    axisLine={false} 
-                    interval={0}
-                    angle={-45}
-                    textAnchor="end"
-                    height={60}
-                  />
-                  <YAxis stroke="rgba(255,255,255,0.2)" fontSize={7} tickLine={false} axisLine={false} />
-                  <RechartsTooltip 
-                    cursor={{ fill: 'rgba(255,255,255,0.02)' }}
-                    contentStyle={{ backgroundColor: '#111', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px', fontSize: '9px' }}
-                  />
-                  <Bar dataKey="hours" radius={[2, 2, 0, 0]} barSize={20}>
-                    {laborAnalytics.chartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={groupColorMap[entry.group] || '#3b82f6'} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+            <div className="h-[450px] w-full">
+              {laborAnalytics.chartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart 
+                    data={laborAnalytics.chartData} 
+                    margin={{ top: 20, right: 30, left: 10, bottom: 80 }}
+                    barGap={0}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" vertical={false} />
+                    <XAxis 
+                      dataKey="name" 
+                      stroke="rgba(255,255,255,0.4)" 
+                      fontSize={13} 
+                      fontWeight="900" 
+                      tickLine={false} 
+                      axisLine={false} 
+                      interval={0}
+                      angle={-45}
+                      textAnchor="end"
+                    />
+                    <YAxis 
+                      stroke="rgba(255,255,255,0.3)" 
+                      fontSize={10} 
+                      fontWeight="black"
+                      tickLine={false} 
+                      axisLine={false}
+                      label={{ value: 'HOURS', angle: -90, position: 'insideLeft', offset: 0, fontSize: 8, fill: 'rgba(255,255,255,0.2)', fontWeight: 'bold' }}
+                    />
+                    <RechartsTooltip 
+                      cursor={{ fill: 'rgba(255,255,255,0.02)' }}
+                      content={({ active, payload }) => {
+                        if (active && payload && payload.length) {
+                          const data = payload[0].payload;
+                          return (
+                            <div className="bg-[#000] border border-white/10 p-3 rounded-lg shadow-2xl backdrop-blur-md">
+                              <p className="text-[10px] font-black text-white uppercase mb-1">{data.name}</p>
+                              <div className="flex items-center gap-2">
+                                <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: groupColorMap[data.group] || '#3b82f6' }} />
+                                <p className="text-[9px] font-bold text-slate-400 uppercase">{data.group}</p>
+                              </div>
+                              <p className="text-[14px] font-mono font-black text-blue-500 mt-1">{data.hours.toLocaleString()} HR</p>
+                              <p className="text-[8px] text-slate-600 font-bold uppercase mt-1">Status: Verified Deployment</p>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <Bar 
+                      dataKey="hours" 
+                      radius={[4, 4, 0, 0]} 
+                      animationDuration={1500}
+                    >
+                      <LabelList 
+                        dataKey="hours" 
+                        position="top" 
+                        fill="rgba(255,255,255,0.6)" 
+                        fontSize={10} 
+                        fontWeight="black"
+                        formatter={(val: number) => val.toLocaleString()}
+                      />
+                      {laborAnalytics.chartData.map((entry, index) => (
+                        <Cell 
+                          key={`cell-${index}`} 
+                          fill={groupColorMap[entry.group] || '#3b82f6'} 
+                          fillOpacity={0.8}
+                          stroke={groupColorMap[entry.group] || '#3b82f6'}
+                          strokeWidth={1}
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center bg-white/[0.01] border border-dashed border-white/5 rounded-3xl group-hover:border-blue-500/10 transition-colors">
+                  <div className="relative">
+                    <Activity size={64} className="text-slate-800 mb-4 animate-pulse" />
+                    <AlertCircle size={20} className="absolute -top-2 -right-2 text-rose-500/40" />
+                  </div>
+                  <h4 className="text-[14px] font-black text-slate-500 uppercase tracking-[0.3em]">No Deployment Data</h4>
+                  <p className="text-[9px] text-slate-700 uppercase mt-2 font-bold tracking-widest">Verify personnel status and period range</p>
+                </div>
+              )}
             </div>
             
-            <div className="md:w-32 flex flex-col justify-center gap-2 pt-4 md:pt-0 border-t md:border-t-0 md:border-l border-white/5 pl-0 md:pl-4">
-              {Object.entries(groupColorMap).slice(0, 5).map(([group, color]) => (
-                <div key={group} className="flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }}></div>
-                  <span className="text-[8px] text-slate-500 font-bold uppercase">GP {group}</span>
-                </div>
-              ))}
+            {/* Legend / Stats overlay */}
+            <div className="absolute bottom-6 right-6 flex flex-col gap-2 pointer-events-none">
+              <div className="bg-black/80 backdrop-blur-md border border-white/5 p-3 rounded-lg text-right">
+                <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest leading-none mb-1">Total Working Hours</p>
+                <p className="text-xl font-mono font-black text-white">{laborAnalytics.totalHours.toLocaleString()}<span className="text-[10px] text-blue-500 ml-1">HRS</span></p>
+              </div>
             </div>
           </div>
         </div>
@@ -855,13 +949,18 @@ export function Dashboard({ isGuest }: DashboardProps) {
             {personnel.map(p => {
                const now = new Date();
                now.setHours(0,0,0,0);
-               const activeSched = schedules.find(s => 
-                 s.personnelId === p.id && 
-                 new Date(s.startDate) <= now && 
-                 new Date(s.endDate) >= now
-               );
-               const isOnDuty = activeSched?.status === 'ON_DUTY';
-               const isTransit = activeSched?.status === 'TRANSIT';
+               const activeSched = schedules.find(s => {
+                 const start = toDate(s.startDate);
+                 const end = toDate(s.endDate);
+                 if (!start || !end || isNaN(start.getTime()) || isNaN(end.getTime())) return false;
+                 const startTime = new Date(start).setHours(0,0,0,0);
+                 const endTime = new Date(end).setHours(0,0,0,0);
+                 return s.personnelId === p.id && 
+                        now.getTime() >= startTime && 
+                        now.getTime() <= endTime;
+               });
+               const isOnDuty = activeSched?.status?.toUpperCase() === 'ON_DUTY';
+               const isTransit = activeSched?.status?.toUpperCase() === 'TRANSIT';
                return { p, isOnDuty, isTransit };
             })
             .sort((a,b) => {
