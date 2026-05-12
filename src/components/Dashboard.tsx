@@ -39,6 +39,7 @@ export function Dashboard({ isGuest }: DashboardProps) {
   const [summaryGroup, setSummaryGroup] = useState<string>('ALL');
   const [summaryPersonnel, setSummaryPersonnel] = useState<string>('ALL');
   const [summaryMonth, setSummaryMonth] = useState<string>('ALL');
+  const [summaryStatus, setSummaryStatus] = useState<string>('ALL');
 
   // Helper for status resolution used in both stats and rendering
   const getEffectiveStatus = (status: string, requestedDate?: string | null) => {
@@ -247,13 +248,22 @@ export function Dashboard({ isGuest }: DashboardProps) {
         const d2 = f.requestedDateIDtoDZ?.substring(0, 7);
         if (d1 !== summaryMonth && d2 !== summaryMonth) return false;
       }
+      if (summaryStatus !== 'ALL') {
+        const s1 = getEffectiveStatus(f.statusDZtoID || 'Requested', f.requestedDateDZtoID);
+        const s2 = getEffectiveStatus(f.statusIDtoDZ || 'Requested', f.requestedDateIDtoDZ);
+        if (s1 !== summaryStatus && s2 !== summaryStatus) return false;
+      }
       return true;
     }).sort((a, b) => {
-      const dateA = a.createdAt?.seconds || 0;
-      const dateB = b.createdAt?.seconds || 0;
-      return dateB - dateA;
+      const getEarliest = (f: FlightRequest) => {
+        const dates = [f.requestedDateDZtoID, f.requestedDateIDtoDZ]
+          .filter(Boolean)
+          .map(d => new Date(d!).getTime());
+        return dates.length > 0 ? Math.min(...dates) : Infinity;
+      };
+      return getEarliest(a) - getEarliest(b);
     });
-  }, [allFlights, personnel, summaryGroup, summaryPersonnel, summaryMonth]);
+  }, [allFlights, personnel, summaryGroup, summaryPersonnel, summaryMonth, summaryStatus]);
 
   const groupColorMap: Record<string, string> = {
     'A': '#3b82f6',
@@ -430,7 +440,17 @@ export function Dashboard({ isGuest }: DashboardProps) {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={laborAnalytics.chartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                  <XAxis dataKey="name" stroke="rgba(255,255,255,0.3)" fontSize={7} tickLine={false} axisLine={false} interval={0} />
+                  <XAxis 
+                    dataKey="name" 
+                    stroke="rgba(255,255,255,0.3)" 
+                    fontSize={7} 
+                    tickLine={false} 
+                    axisLine={false} 
+                    interval={0}
+                    angle={-45}
+                    textAnchor="end"
+                    height={60}
+                  />
                   <YAxis stroke="rgba(255,255,255,0.3)" fontSize={7} tickLine={false} axisLine={false} />
                   <RechartsTooltip 
                     cursor={{ fill: 'rgba(255,255,255,0.02)' }}
@@ -443,6 +463,15 @@ export function Dashboard({ isGuest }: DashboardProps) {
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
+            </div>
+            
+            <div className="flex flex-wrap gap-4 pt-4 border-t border-white/5">
+              {Object.entries(groupColorMap).filter(([key]) => key.length <= 1).map(([group, color]) => (
+                <div key={group} className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }}></div>
+                  <span className="text-[10px] text-slate-500 font-bold uppercase">GROUP {group}</span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -513,47 +542,58 @@ export function Dashboard({ isGuest }: DashboardProps) {
               <p className="text-[10px] text-slate-500 uppercase mt-1">Pending ticket actions</p>
             </div>
             <Clock size={12} className="text-blue-500" />
-          </div>          <div className="flex-1 space-y-3 overflow-y-auto custom-scrollbar pr-1 max-h-[300px]">
-             {recentFlights.filter(f => f.statusDZtoID === 'Requested' || f.statusIDtoDZ === 'Requested').slice(0, 8).map((f) => {
+          </div>          <div className="flex-1 space-y-3 overflow-y-auto custom-scrollbar pr-1 max-h-[400px]">
+             {allFlights
+               .filter(f => f.statusDZtoID === 'Requested' || f.statusIDtoDZ === 'Requested')
+               .sort((a, b) => {
+                 const getEarliestReq = (f: FlightRequest) => {
+                   const dates = [];
+                   if (f.statusDZtoID === 'Requested') dates.push(new Date(f.requestedDateDZtoID!).getTime());
+                   if (f.statusIDtoDZ === 'Requested') dates.push(new Date(f.requestedDateIDtoDZ!).getTime());
+                   return dates.length > 0 ? Math.min(...dates) : Infinity;
+                 };
+                 return getEarliestReq(a) - getEarliestReq(b);
+               })
+               .map((f) => {
                 const person = personnel.find(p => p.id === f.personnelId);
                 return (
-                  <div key={f.id} className="p-3 rounded bg-white/[0.02] border border-white/5 group hover:border-blue-500/20 transition-all">
-                     <div className="flex justify-between items-start mb-1">
-                        <span className="text-[11px] text-white font-bold uppercase truncate max-w-[120px]">{person?.fullName || 'Crew member'}</span>
-                        <span className="font-mono text-[8px] text-slate-600">REQ-{f.id.slice(0,4)}</span>
-                     </div>
-                     <div className="flex flex-col gap-1.5">
-                        {f.requestedDateDZtoID && f.statusDZtoID === 'Requested' && (
-                          <div className="flex items-center justify-between">
-                            <div className="flex flex-col">
-                              <span className="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 text-[7px] font-black uppercase w-fit">DZ → ID</span>
-                              <span className="text-[7px] text-slate-500 font-bold uppercase mt-1 italic">
-                                {getDaysUntil(f.requestedDateDZtoID) === 0 ? 'FLIGHT TODAY' : 
-                                 getDaysUntil(f.requestedDateDZtoID) < 0 ? 'PAST DUE' : 
-                                 `${getDaysUntil(f.requestedDateDZtoID)} DAYS REMAINING`}
-                              </span>
-                            </div>
-                            <span className="text-[9px] text-slate-400 font-mono italic">{formatDate(f.requestedDateDZtoID)}</span>
-                          </div>
-                        )}
-                        {f.requestedDateIDtoDZ && f.statusIDtoDZ === 'Requested' && (
-                          <div className="flex items-center justify-between">
-                            <div className="flex flex-col">
-                              <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[7px] font-black uppercase w-fit">ID → DZ</span>
-                              <span className="text-[7px] text-slate-500 font-bold uppercase mt-1 italic">
-                                {getDaysUntil(f.requestedDateIDtoDZ) === 0 ? 'FLIGHT TODAY' : 
-                                 getDaysUntil(f.requestedDateIDtoDZ) < 0 ? 'PAST DUE' : 
-                                 `${getDaysUntil(f.requestedDateIDtoDZ)} DAYS REMAINING`}
-                              </span>
-                            </div>
-                            <span className="text-[9px] text-slate-400 font-mono italic">{formatDate(f.requestedDateIDtoDZ)}</span>
-                          </div>
-                        )}
-                     </div>
-                  </div>
+                   <div key={f.id} className="p-3 rounded bg-white/[0.02] border border-white/5 group hover:border-blue-500/20 transition-all">
+                      <div className="flex justify-between items-start mb-1">
+                         <span className="text-[11px] text-white font-bold uppercase truncate max-w-[120px]">{person?.fullName || 'Crew member'}</span>
+                         <span className="font-mono text-[8px] text-slate-600">REQ-{f.id.slice(0,4)}</span>
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                         {f.requestedDateDZtoID && f.statusDZtoID === 'Requested' && (
+                           <div className="flex items-center justify-between">
+                             <div className="flex flex-col">
+                               <span className="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 text-[7px] font-black uppercase w-fit">DZ → ID</span>
+                               <span className="text-[10px] text-slate-500 font-bold uppercase mt-1 italic leading-tight">
+                                 {getDaysUntil(f.requestedDateDZtoID) === 0 ? 'FLIGHT TODAY' : 
+                                  getDaysUntil(f.requestedDateDZtoID) < 0 ? 'PAST DUE' : 
+                                  `${getDaysUntil(f.requestedDateDZtoID)} DAYS REMAINING`}
+                               </span>
+                             </div>
+                             <span className="text-[9px] text-slate-400 font-mono italic">{formatDate(f.requestedDateDZtoID)}</span>
+                           </div>
+                         )}
+                         {f.requestedDateIDtoDZ && f.statusIDtoDZ === 'Requested' && (
+                           <div className="flex items-center justify-between">
+                             <div className="flex flex-col">
+                               <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[7px] font-black uppercase w-fit">ID → DZ</span>
+                               <span className="text-[10px] text-slate-500 font-bold uppercase mt-1 italic leading-tight">
+                                 {getDaysUntil(f.requestedDateIDtoDZ) === 0 ? 'FLIGHT TODAY' : 
+                                  getDaysUntil(f.requestedDateIDtoDZ) < 0 ? 'PAST DUE' : 
+                                  `${getDaysUntil(f.requestedDateIDtoDZ)} DAYS REMAINING`}
+                               </span>
+                             </div>
+                             <span className="text-[9px] text-slate-400 font-mono italic">{formatDate(f.requestedDateIDtoDZ)}</span>
+                           </div>
+                         )}
+                      </div>
+                   </div>
                 );
              })}
-             {recentFlights.filter(f => f.statusDZtoID === 'Requested' || f.statusIDtoDZ === 'Requested').length === 0 && (
+             {allFlights.filter(f => f.statusDZtoID === 'Requested' || f.statusIDtoDZ === 'Requested').length === 0 && (
                 <div className="h-full flex flex-col items-center justify-center opacity-20 py-10">
                    <CheckCircle2 size={24} className="mb-2" />
                    <p className="text-[10px] font-black uppercase">All clear</p>
@@ -673,6 +713,20 @@ export function Dashboard({ isGuest }: DashboardProps) {
                   {availableMonths.map(m => <option key={m} value={m}>{formatPeriod(m)}</option>)}
                 </select>
              </div>
+             <div className="flex items-center gap-2 px-2 py-1 bg-black/40 border border-white/5 rounded-lg text-[9px]">
+                <Activity size={10} className="text-slate-500" />
+                <select 
+                  value={summaryStatus} 
+                  onChange={(e) => setSummaryStatus(e.target.value)}
+                  className="bg-transparent text-slate-300 focus:outline-none uppercase font-bold"
+                >
+                  <option value="ALL">Status</option>
+                  <option value="Requested">Requested</option>
+                  <option value="Received">Received</option>
+                  <option value="Need Action">Need Action</option>
+                  <option value="Pending">Pending</option>
+                </select>
+             </div>
              <button 
                onClick={exportToExcel}
                className="flex items-center gap-2 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[9px] font-black uppercase transition-all shadow-lg shadow-emerald-900/20"
@@ -725,7 +779,7 @@ export function Dashboard({ isGuest }: DashboardProps) {
                             <div className="flex flex-col">
                               <span className="text-[9px] text-slate-300 font-mono tracking-tighter">Indonesia → Algeria ({formatDate(flight.requestedDateIDtoDZ)})</span>
                               {(flight.statusIDtoDZ === 'Requested' || flight.statusIDtoDZ === 'Not Requested' || flight.statusIDtoDZ === 'Need Action') && (
-                                <span className="text-[7px] text-slate-500 font-bold uppercase italic -mt-0.5">
+                                <span className="text-[10px] text-slate-500 font-bold uppercase italic -mt-0.5 leading-tight">
                                   {getDaysUntil(flight.requestedDateIDtoDZ) === 0 ? 'FLIGHT TODAY' : 
                                    getDaysUntil(flight.requestedDateIDtoDZ) < 0 ? 'PAST DUE' : 
                                    `${getDaysUntil(flight.requestedDateIDtoDZ)} DAYS REMAINING`}
@@ -740,7 +794,7 @@ export function Dashboard({ isGuest }: DashboardProps) {
                             <div className="flex flex-col">
                               <span className="text-[9px] text-slate-300 font-mono tracking-tighter">Algeria → Indonesia ({formatDate(flight.requestedDateDZtoID)})</span>
                               {(flight.statusDZtoID === 'Requested' || flight.statusDZtoID === 'Not Requested' || flight.statusDZtoID === 'Need Action') && (
-                                <span className="text-[7px] text-slate-500 font-bold uppercase italic -mt-0.5">
+                                <span className="text-[10px] text-slate-500 font-bold uppercase italic -mt-0.5 leading-tight">
                                   {getDaysUntil(flight.requestedDateDZtoID) === 0 ? 'FLIGHT TODAY' : 
                                    getDaysUntil(flight.requestedDateDZtoID) < 0 ? 'PAST DUE' : 
                                    `${getDaysUntil(flight.requestedDateDZtoID)} DAYS REMAINING`}
