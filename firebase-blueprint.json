@@ -41,6 +41,19 @@
         "createdAt": { "type": "object" }
       },
       "required": ["personnelId", "startDate", "endDate", "statusDZtoID", "statusIDtoDZ", "status"]
+    },
+    "HubEvent": {
+      "title": "Hub Event",
+      "description": "General events for the drilling hub",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "startDate": { "type": "string" },
+        "endDate": { "type": "string" },
+        "type": { "type": "string", "enum": ["general", "meeting", "walkthrough", "holiday"] }
+      },
+      "required": ["title", "startDate", "endDate", "type"]
     }
   },
   "firestore": {
@@ -55,6 +68,10 @@
     "/flightRequests": {
       "schema": "FlightRequest",
       "description": "Flight booking requests"
+    },
+    "/events": {
+      "schema": "HubEvent",
+      "description": "Hub events"
     }
   }
 }

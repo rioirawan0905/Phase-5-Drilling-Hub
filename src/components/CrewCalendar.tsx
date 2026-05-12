@@ -1,8 +1,8 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, MouseEvent } from 'react';
 import { collection, onSnapshot, query, addDoc, updateDoc, doc, deleteDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { Personnel, Scheduling, ScheduleStatus } from '../types';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Users, Clock, LayoutGrid, Plus, Trash2, X } from 'lucide-react';
+import { Personnel, Scheduling, ScheduleStatus, HubEvent } from '../types';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Users, Clock, LayoutGrid, Plus, Trash2, X, AlertCircle, Wrench, Info, Palmtree, Tag } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn, formatDate } from '../lib/utils';
 import { useForm } from 'react-hook-form';
@@ -16,7 +16,16 @@ const scheduleSchema = z.object({
   status: z.enum(['ON_DUTY', 'OFF_DUTY', 'TRANSIT'] as const),
 });
 
+const eventSchema = z.object({
+  title: z.string().min(1, 'Title is required'),
+  description: z.string().optional(),
+  startDate: z.string().min(1, 'Start date is required'),
+  endDate: z.string().min(1, 'End date is required'),
+  type: z.enum(['general', 'meeting', 'walkthrough', 'holiday'] as const),
+});
+
 type ScheduleFormData = z.infer<typeof scheduleSchema>;
+type EventFormData = z.infer<typeof eventSchema>;
 
 type ViewMode = 'month' | 'week' | 'personnel' | 'gantt';
 
@@ -29,8 +38,11 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [personnel, setPersonnel] = useState<Personnel[]>([]);
   const [schedules, setSchedules] = useState<Scheduling[]>([]);
+  const [events, setEvents] = useState<HubEvent[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEventModalOpen, setIsEventModalOpen] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState<Scheduling | null>(null);
+  const [editingEvent, setEditingEvent] = useState<HubEvent | null>(null);
   const [sortBy, setSortBy] = useState<'name' | 'group'>('name');
   const [filterGroup, setFilterGroup] = useState<string>('ALL');
   const [filterPersonnel, setFilterPersonnel] = useState<string>('ALL');
@@ -85,8 +97,14 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
     defaultValues: { status: 'ON_DUTY', personnelIds: [] }
   });
 
+  const { register: registerEvent, handleSubmit: handleSubmitEvent, reset: resetEvent, setValue: setEventValue, watch: watchEvent, formState: { errors: eventErrors } } = useForm<EventFormData>({
+    resolver: zodResolver(eventSchema),
+    defaultValues: { type: 'general' }
+  });
+
   const watchPersonnelIds = watch('personnelIds');
   const watchStatus = watch('status');
+  const watchEventType = watchEvent('type');
 
   useEffect(() => {
     const unsubP = onSnapshot(collection(db, 'personnel'), (snap) => {
@@ -95,8 +113,69 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
     const unsubS = onSnapshot(collection(db, 'schedules'), (snap) => {
       setSchedules(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Scheduling)));
     });
-    return () => { unsubP(); unsubS(); };
+    const unsubE = onSnapshot(collection(db, 'events'), (snap) => {
+      setEvents(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as HubEvent)));
+    });
+    return () => { unsubP(); unsubS(); unsubE(); };
   }, []);
+
+  const onSaveEvent = async (data: EventFormData) => {
+    try {
+      if (editingEvent) {
+        await updateDoc(doc(db, 'events', editingEvent.id), data);
+      } else {
+        await addDoc(collection(db, 'events'), { ...data, createdAt: new Date() });
+      }
+      setIsEventModalOpen(false);
+      setEditingEvent(null);
+      resetEvent({ type: 'general', title: '', description: '', startDate: '', endDate: '' });
+    } catch (error) {
+      handleFirestoreError(error, editingEvent ? OperationType.UPDATE : OperationType.CREATE, 'events');
+    }
+  };
+
+  const handleOpenAddEvent = (dateStr?: string) => {
+    if (isGuest) return;
+    setEditingEvent(null);
+    resetEvent({ 
+      type: 'general', 
+      title: '',
+      description: '',
+      startDate: dateStr || new Date().toISOString().split('T')[0], 
+      endDate: dateStr || new Date().toISOString().split('T')[0]
+    });
+    setIsEventModalOpen(true);
+  };
+
+  const handleEditEvent = (ev: HubEvent) => {
+    if (isGuest) return;
+    setEditingEvent(ev);
+    resetEvent({
+      title: ev.title,
+      description: ev.description || '',
+      startDate: ev.startDate,
+      endDate: ev.endDate,
+      type: ev.type
+    });
+    setIsEventModalOpen(true);
+  };
+
+  const handleDeleteEvent = async (id: string, e: MouseEvent) => {
+    e.stopPropagation();
+    if (isGuest) return;
+    if (confirm('Delete this event?')) {
+      await deleteDoc(doc(db, 'events', id));
+    }
+  };
+
+  const getEventIcon = (type: HubEvent['type'], size = 12) => {
+    switch(type) {
+      case 'meeting': return <Clock size={size} className="text-amber-400" />;
+      case 'walkthrough': return <Users size={size} className="text-purple-400" />;
+      case 'holiday': return <Palmtree size={size} className="text-emerald-400" />;
+      default: return <Info size={size} className="text-blue-400" />;
+    }
+  };
 
   const onSaveSchedule = async (data: ScheduleFormData) => {
     try {
@@ -203,21 +282,45 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
         const end = s.endDate;
         return dateStr >= start && dateStr <= end;
       });
+      const activeEvents = events.filter(e => dateStr >= e.startDate && dateStr <= e.endDate);
 
       days.push(
         <div 
           key={day} 
           className={cn(
             "h-28 bg-[#111114] border border-white/5 p-2 overflow-hidden flex flex-col hover:bg-white/[0.02] transition-colors group",
-            isGuest ? "cursor-default" : "cursor-pointer"
+            isGuest ? "cursor-default" : "cursor-default"
           )}
-          onClick={() => handleOpenAdd(dateStr)}
         >
           <div className="flex items-center justify-between mb-1">
              <span className="text-[10px] font-mono text-slate-500">{day}</span>
-             {!isGuest && <Plus size={10} className="text-slate-700 opacity-0 group-hover:opacity-100" />}
+             {!isGuest && (
+               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                 <button onClick={() => handleOpenAdd(dateStr)} className="p-0.5 hover:text-blue-500 text-slate-700 transition-colors" title="Add Duty"><Plus size={10} /></button>
+                 <button onClick={() => handleOpenAddEvent(dateStr)} className="p-0.5 hover:text-emerald-500 text-slate-700 transition-colors" title="Add Event"><Tag size={8} /></button>
+               </div>
+             )}
           </div>
           <div className="flex-1 space-y-1 overflow-y-auto custom-scrollbar">
+            {activeEvents.map(ev => (
+              <div 
+                key={ev.id}
+                onClick={(e) => { e.stopPropagation(); handleEditEvent(ev); }}
+                className={cn(
+                  "text-[8px] px-1.5 py-0.5 rounded flex items-center gap-1 font-bold text-white bg-white/5 border border-white/5 relative group/event",
+                  isGuest ? "cursor-default" : "cursor-pointer hover:border-white/20"
+                )}
+                title={`${ev.title}${ev.description ? `: ${ev.description}` : ''}`}
+              >
+                {getEventIcon(ev.type, 8)}
+                <span className="truncate">{ev.title}</span>
+                {/* Tooltip on hover */}
+                <div className="absolute bottom-full left-0 mb-2 w-32 bg-black p-2 rounded border border-white/10 text-[7px] invisible group-hover/event:visible z-50">
+                  <p className="font-bold border-b border-white/10 pb-1 mb-1">{ev.title}</p>
+                  <p className="opacity-70 leading-tight">{ev.description || 'No description'}</p>
+                </div>
+              </div>
+            ))}
             {activeSchedules.map(s => {
               const person = personnel.find(p => p.id === s.personnelId);
               return (
@@ -274,16 +377,43 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
             key={dateStr} 
             className={cn(
               "bg-[#111114] border-b border-r border-white/5 flex flex-col hover:bg-white/[0.01] transition-colors group",
-              isGuest ? "cursor-default" : "cursor-pointer"
+              isGuest ? "cursor-default" : "cursor-default"
             )}
-            onClick={() => handleOpenAdd(dateStr)}
           >
             <div className="bg-black/40 py-2 text-center border-b border-white/5 relative">
               <p className="text-[10px] font-bold text-slate-400 uppercase">{date.toLocaleDateString('default', { weekday: 'short' })}</p>
               <p className="text-[14px] font-mono text-white">{date.getDate()}</p>
-              {!isGuest && <Plus size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-600 opacity-0 group-hover:opacity-100" />}
+              {!isGuest && (
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button onClick={() => handleOpenAdd(dateStr)} className="p-1 hover:text-blue-500 text-slate-700" title="Add Duty"><Plus size={12} /></button>
+                  <button onClick={() => handleOpenAddEvent(dateStr)} className="p-1 hover:text-emerald-500 text-slate-700" title="Add Event"><Tag size={10} /></button>
+                </div>
+              )}
             </div>
             <div className="flex-1 p-2 space-y-2 overflow-y-auto custom-scrollbar">
+              {events.filter(e => dateStr >= e.startDate && dateStr <= e.endDate).map(ev => (
+                <div 
+                  key={ev.id}
+                  onClick={(e) => { e.stopPropagation(); handleEditEvent(ev); }}
+                  className="p-1.5 rounded-lg bg-white/[0.02] border border-white/5 flex items-center gap-2 group/event relative cursor-pointer hover:border-white/20"
+                >
+                  {getEventIcon(ev.type, 10)}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[8px] font-bold text-slate-200 truncate">{ev.title}</p>
+                  </div>
+                  {/* Tooltip on hover */}
+                  <div className="absolute bottom-full left-0 mb-2 w-40 bg-black p-2 rounded border border-white/10 text-[8px] invisible group-hover/event:visible z-50 shadow-2xl">
+                    <p className="font-bold border-b border-white/10 pb-1 mb-1 text-white">{ev.title}</p>
+                    <p className="text-slate-400 leading-tight">{ev.description || 'No description provided'}</p>
+                    <p className="text-[7px] text-slate-600 mt-2 font-mono uppercase">{formatDate(ev.startDate)} - {formatDate(ev.endDate)}</p>
+                  </div>
+                  {!isGuest && (
+                    <button onClick={(e) => handleDeleteEvent(ev.id, e)} className="opacity-0 group-hover/event:opacity-100 hover:text-rose-500 text-slate-700 transition-opacity">
+                      <Trash2 size={10} />
+                    </button>
+                  )}
+                </div>
+              ))}
               {filteredSchedules.filter(s => dateStr >= s.startDate && dateStr <= s.endDate).map(s => {
                 const person = personnel.find(p => p.id === s.personnelId);
                 return (
@@ -315,6 +445,51 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
 
   const renderPersonnelView = () => (
     <div className="space-y-4 max-h-[700px] overflow-y-auto custom-scrollbar pr-2">
+      {/* Hub Events Timeline */}
+      {events.length > 0 && (
+        <div className="theme-card p-4 border-emerald-500/20 bg-emerald-500/5">
+          <div className="flex items-center justify-between mb-4">
+             <h4 className="text-xs font-black text-emerald-500 uppercase tracking-[0.2em] flex items-center gap-2">
+               <Tag size={14} /> Global Hub Events
+             </h4>
+          </div>
+          <div className="flex gap-3 overflow-x-auto pb-2 custom-scrollbar">
+            {events.sort((a,b) => a.startDate.localeCompare(b.startDate)).map(ev => (
+              <div 
+                key={ev.id}
+                onClick={() => handleEditEvent(ev)}
+                className={cn(
+                  "bg-black/60 border border-emerald-500/20 px-4 py-3 rounded-xl shrink-0 min-w-[200px] relative overflow-hidden group/item transition-all",
+                  isGuest ? "cursor-default" : "cursor-pointer hover:border-emerald-500/40"
+                )}
+              >
+                <div className="absolute left-0 top-0 bottom-0 w-1 bg-emerald-500" />
+                <div className="flex justify-between items-start mb-2">
+                  <div className="flex items-center gap-2">
+                    {getEventIcon(ev.type, 10)}
+                    <p className="text-[8px] font-black text-emerald-600 uppercase tracking-widest">{ev.type}</p>
+                  </div>
+                  {!isGuest && (
+                    <button 
+                      onClick={(e) => handleDeleteEvent(ev.id, e)}
+                      className="text-slate-800 hover:text-rose-500 opacity-0 group-hover/item:opacity-100 mt-[-4px]"
+                    >
+                      <Trash2 size={10} />
+                    </button>
+                  )}
+                </div>
+                <h5 className="text-[11px] font-bold text-white mb-2 truncate">{ev.title}</h5>
+                <div className="space-y-1">
+                   <p className="text-[9px] text-slate-400 font-mono flex items-center gap-2 italic">
+                     {formatDate(ev.startDate)} - {formatDate(ev.endDate)}
+                   </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {sortedPersonnel.map(p => {
         const pSchedules = filteredSchedules.filter(s => s.personnelId === p.id).sort((a,b) => a.startDate.localeCompare(b.startDate));
         return (
@@ -445,6 +620,43 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
 
           {/* Rows */}
           <div className="divide-y divide-white/5">
+            {/* Hub Events Row */}
+            <div className="flex group hover:bg-white/[0.01]">
+              <div className="w-48 shrink-0 border-r border-white/5 p-3 bg-emerald-900/10">
+                <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest flex items-center gap-2">
+                  <Tag size={12} /> Hub Events
+                </p>
+                <p className="text-[8px] text-slate-600 font-mono uppercase mt-1">General Schedule</p>
+              </div>
+              <div className="flex-1 relative flex h-14 items-center">
+                {events.map(ev => {
+                  const findIndex = (dateStr: string) => timelineDates.findIndex(td => td.dateStr === dateStr);
+                  let startIdx = findIndex(ev.startDate);
+                  let endIdx = findIndex(ev.endDate);
+                  if (startIdx === -1 && endIdx === -1) return null;
+                  if (startIdx === -1) startIdx = 0;
+                  if (endIdx === -1) endIdx = timelineDates.length - 1;
+                  const left = startIdx * dayWidth;
+                  const width = (endIdx - startIdx + 1) * dayWidth;
+                  return (
+                    <div 
+                      key={ev.id}
+                      style={{ left, width }}
+                      onClick={(e) => { e.stopPropagation(); handleEditEvent(ev); }}
+                      className="absolute h-8 rounded-lg flex items-center gap-2 px-3 border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 group/ev cursor-pointer hover:bg-emerald-500/20 transition-all z-10"
+                    >
+                      {getEventIcon(ev.type, 10)}
+                      <span className="text-[9px] font-black uppercase tracking-widest truncate">{ev.title}</span>
+                      <div className="absolute bottom-full left-0 mb-2 w-48 bg-black p-2 rounded border border-white/10 text-[9px] invisible group-hover/ev:visible z-50">
+                         <p className="font-bold border-b border-white/10 pb-1 mb-1 text-white">{ev.title}</p>
+                         <p className="text-slate-400 leading-tight">{ev.description || 'No description'}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
             {sortedPersonnel.map(p => (
               <div key={p.id} className="flex group hover:bg-white/[0.01]">
                 <div className="w-48 shrink-0 border-r border-white/5 p-3 bg-black/10">
@@ -546,19 +758,6 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                </select>
             </div>
             <div className="hidden md:flex items-center gap-3 px-4 py-2 bg-black/40 border border-white/5 rounded-xl">
-               <span className="text-[10px] font-black text-slate-500 uppercase">Staff</span>
-               <select 
-                 value={filterPersonnel} 
-                 onChange={(e) => setFilterPersonnel(e.target.value)}
-                 className="bg-transparent text-white text-[11px] font-bold uppercase focus:outline-none cursor-pointer max-w-[100px]"
-               >
-                 <option value="ALL">ALL</option>
-                 {personnel.sort((a,b) => a.fullName.localeCompare(b.fullName)).map(p => (
-                   <option key={p.id} value={p.id}>{p.fullName}</option>
-                 ))}
-               </select>
-            </div>
-            <div className="hidden md:flex items-center gap-3 px-4 py-2 bg-black/40 border border-white/5 rounded-xl">
                <span className="text-[10px] font-black text-slate-500 uppercase">Sort</span>
                <select 
                  value={sortBy} 
@@ -570,12 +769,20 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                </select>
             </div>
             {!isGuest && (
-              <button 
-                onClick={() => handleOpenAdd()}
-                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-3 md:px-4 py-2 rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-[0.1em] transition-all shadow-lg shadow-blue-900/40"
-              >
-                <Plus size={14} /> <span className="hidden xs:inline">Add Duty</span>
-              </button>
+              <div className="flex gap-2">
+                <button 
+                  onClick={() => handleOpenAdd()}
+                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-3 md:px-4 py-2 rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-[0.1em] transition-all shadow-lg shadow-blue-900/40"
+                >
+                  <Plus size={14} /> <span className="hidden xs:inline">Add Duty</span>
+                </button>
+                <button 
+                  onClick={() => handleOpenAddEvent()}
+                  className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-3 md:px-4 py-2 rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-[0.1em] transition-all shadow-lg shadow-emerald-900/40"
+                >
+                  <Tag size={12} /> <span className="hidden xs:inline">Add Event</span>
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -598,6 +805,106 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
           </motion.div>
         </AnimatePresence>
       </div>
+
+      {/* Event Modal */}
+      <AnimatePresence>
+        {isEventModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsEventModalOpen(false)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 10 }}
+              className="relative w-full max-w-md bg-[#16161a] border border-white/10 rounded-2xl shadow-2xl p-6 overflow-hidden"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-bold text-white uppercase tracking-widest flex items-center gap-3">
+                  <Tag size={18} className="text-emerald-500" />
+                  {editingEvent ? 'Edit Hub Event' : 'Create Hub Event'}
+                </h3>
+                <button onClick={() => setIsEventModalOpen(false)} className="p-2 text-slate-500 hover:text-white transition-colors">
+                  <X size={20} />
+                </button>
+              </div>
+
+              <form onSubmit={handleSubmitEvent(onSaveEvent)} className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-500 uppercase font-bold px-1">Event Title</label>
+                  <input {...registerEvent('title')} className="w-full bg-[#0a0a0c] border border-white/5 px-4 py-2.5 text-sm text-slate-300 rounded-lg focus:outline-none focus:border-emerald-500/30" placeholder="e.g. Rig Maintenance" />
+                  {eventErrors.title && <p className="text-[10px] text-rose-500 px-1">{eventErrors.title.message}</p>}
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-500 uppercase font-bold px-1">Description</label>
+                  <textarea {...registerEvent('description')} className="w-full bg-[#0a0a0c] border border-white/5 px-4 py-2.5 text-sm text-slate-300 rounded-lg focus:outline-none focus:border-emerald-500/30 min-h-[80px] resize-none" placeholder="Provide event details..." />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-slate-500 uppercase font-bold px-1">Start Date</label>
+                    <input type="date" {...registerEvent('startDate')} className="w-full bg-[#0a0a0c] border border-white/5 px-4 py-2.5 text-sm text-slate-300 rounded-lg focus:outline-none focus:border-emerald-500/30" />
+                    {eventErrors.startDate && <p className="text-[10px] text-rose-500 px-1">{eventErrors.startDate.message}</p>}
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-slate-500 uppercase font-bold px-1">End Date</label>
+                    <input type="date" {...registerEvent('endDate')} className="w-full bg-[#0a0a0c] border border-white/5 px-4 py-2.5 text-sm text-slate-300 rounded-lg focus:outline-none focus:border-emerald-500/30" />
+                    {eventErrors.endDate && <p className="text-[10px] text-rose-500 px-1">{eventErrors.endDate.message}</p>}
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-500 uppercase font-bold px-1">Event Type</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { value: 'general', label: 'General', icon: Info },
+                      { value: 'meeting', label: 'Meeting', icon: Clock },
+                      { value: 'holiday', label: 'Holiday', icon: Palmtree },
+                      { value: 'walkthrough', label: 'Walk Through', icon: Users },
+                    ].map(type => (
+                      <button
+                        key={type.value}
+                        type="button"
+                        onClick={() => setEventValue('type', type.value as any)}
+                        className={cn(
+                          "py-2.5 rounded-lg text-[9px] font-black uppercase tracking-widest border flex items-center justify-center gap-2 transition-all",
+                          watchEventType === type.value 
+                            ? "bg-emerald-500/20 border-emerald-500 text-emerald-400"
+                            : "bg-black/40 border-white/5 text-slate-600 hover:border-white/20"
+                        )}
+                      >
+                        <type.icon size={12} />
+                        {type.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-6 border-t border-white/5 mt-6">
+                  <button 
+                    type="button"
+                    onClick={() => setIsEventModalOpen(false)}
+                    className="flex-1 px-4 py-3 rounded-xl bg-black border border-white/5 text-slate-400 text-xs font-bold uppercase tracking-widest hover:text-white transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit"
+                    className="flex-1 px-4 py-3 rounded-xl bg-emerald-600 text-white text-xs font-bold uppercase tracking-widest hover:bg-emerald-500 transition-all shadow-lg shadow-emerald-900/40"
+                  >
+                    {editingEvent ? 'Update Event' : 'Save Event'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Schedule Modal */}
       <AnimatePresence>

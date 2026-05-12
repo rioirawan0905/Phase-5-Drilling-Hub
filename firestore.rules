@@ -66,5 +66,10 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isVerified();
     }
+
+    match /events/{eventId} {
+      allow read: if true;
+      allow write: if isVerified();
+    }
   }
 }

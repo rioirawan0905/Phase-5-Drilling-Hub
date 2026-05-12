@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot, query } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { FlightRequest, Personnel, Scheduling } from '../types';
+import { FlightRequest, Personnel, Scheduling, HubEvent } from '../types';
 import { PieChart, Pie, Tooltip as RechartsTooltip, ResponsiveContainer, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, AreaChart, Area } from 'recharts';
-import { Users, Plane, Activity, CheckCircle2, AlertCircle, Clock, Filter, Calendar, Briefcase, LayoutGrid, ArrowRight, ArrowLeft, Download, Info, Globe, Sun, Cloud, CloudRain, CloudSnow, CloudLightning, CloudDrizzle, CloudFog, Wind } from 'lucide-react';
+import { Users, Plane, Activity, CheckCircle2, AlertCircle, Clock, Filter, Calendar, Briefcase, LayoutGrid, ArrowRight, ArrowLeft, Download, Info, Globe, Sun, Cloud, CloudRain, CloudSnow, CloudLightning, CloudDrizzle, CloudFog, Wind, Tag, Palmtree, Wrench } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn, formatDate } from '../lib/utils';
 import * as XLSX from 'xlsx';
@@ -22,6 +22,7 @@ export function Dashboard({ isGuest }: DashboardProps) {
   });
 
   const [recentFlights, setRecentFlights] = useState<FlightRequest[]>([]);
+  const [events, setEvents] = useState<HubEvent[]>([]);
   const [routeData, setRouteData] = useState<any[]>([]);
   const [statusData, setStatusData] = useState<any[]>([]);
   const [allFlights, setAllFlights] = useState<FlightRequest[]>([]);
@@ -228,10 +229,15 @@ export function Dashboard({ isGuest }: DashboardProps) {
         .map(([name, value]) => ({ name, value })));
     });
 
+    const eventsUnsub = onSnapshot(collection(db, 'events'), (snap) => {
+      setEvents(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as HubEvent)));
+    });
+
     return () => {
       personnelUnsub();
       schedulesUnsub();
       flightsUnsub();
+      eventsUnsub();
     };
   }, [stats.totalPersonnel]);
 
@@ -409,6 +415,30 @@ export function Dashboard({ isGuest }: DashboardProps) {
     XLSX.writeFile(workbook, `Flight_Requests_Summary_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
+  const upcomingEvents = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
+    return events
+      .filter(e => e.endDate >= today)
+      .sort((a, b) => a.startDate.localeCompare(b.startDate));
+  }, [events]);
+
+  const pastEvents = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
+    return events
+      .filter(e => e.endDate < today)
+      .sort((a, b) => b.startDate.localeCompare(a.startDate))
+      .slice(0, 5);
+  }, [events]);
+
+  const getEventIcon = (type: HubEvent['type'], size = 12) => {
+    switch(type) {
+      case 'meeting': return <Clock size={size} className="text-amber-400" />;
+      case 'walkthrough': return <Users size={size} className="text-purple-400" />;
+      case 'holiday': return <Palmtree size={size} className="text-emerald-400" />;
+      default: return <Info size={size} className="text-blue-400" />;
+    }
+  };
+
   const getDaysUntil = (dateStr: string) => {
     const today = new Date();
     today.setHours(0,0,0,0);
@@ -461,60 +491,116 @@ export function Dashboard({ isGuest }: DashboardProps) {
       {/* Global Operations & Group Deployment */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         {/* World Clocks & Weather */}
-        <div className="lg:col-span-1 theme-container bg-gradient-to-br from-blue-900/10 to-transparent border-blue-500/10 p-4 md:p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Globe className="text-blue-500" size={14} />
-            <h3 className="text-[10px] font-black uppercase tracking-widest text-white">Global Operations</h3>
-          </div>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between p-3 rounded-lg bg-black/20 border border-white/5 group hover:bg-white/[0.02] transition-colors">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500">
-                  <span className="font-bold text-[10px]">JKT</span>
-                </div>
-                <div>
-                  <p className="text-[9px] text-slate-500 font-bold uppercase">Jakarta, ID</p>
-                  <p className="text-[14px] font-mono font-black text-white">{times.jakarta}</p>
-                </div>
-              </div>
-              {weather?.jakarta && (
-                <div className="text-right flex flex-col items-end">
-                  <div className="flex items-center justify-end gap-1.5 mb-0.5">
-                    {getWeatherIcon(weather.jakarta.desc)}
-                    <p className="text-[14px] font-mono font-bold text-orange-400">{weather.jakarta.temp}°C</p>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[8px] text-slate-600 font-bold uppercase truncate max-w-[60px]">{weather.jakarta.desc}</span>
-                    <div className="flex items-center gap-1 border-l border-white/10 pl-1.5">
-                      <Wind size={8} className="text-slate-500" />
-                      <span className={cn("text-[8px] font-black", getAQIInfo(weather.jakarta.aqi).color)}>AQI {weather.jakarta.aqi || '--'}</span>
-                    </div>
-                  </div>
-                </div>
-              )}
+        <div className="lg:col-span-1 flex flex-col gap-6">
+          <div className="theme-container bg-gradient-to-br from-blue-900/10 to-transparent border-blue-500/10 p-4 md:p-6 shrink-0">
+            <div className="flex items-center gap-2 mb-4">
+              <Globe className="text-blue-500" size={14} />
+              <h3 className="text-[10px] font-black uppercase tracking-widest text-white">Global Operations</h3>
             </div>
-            <div className="flex items-center justify-between p-3 rounded-lg bg-black/20 border border-white/5 group hover:bg-white/[0.02] transition-colors">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500">
-                  <span className="font-bold text-[10px]">ALG</span>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-3 rounded-lg bg-black/20 border border-white/5 group hover:bg-white/[0.02] transition-colors">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500">
+                    <span className="font-bold text-[10px]">JKT</span>
+                  </div>
+                  <div>
+                    <p className="text-[9px] text-slate-500 font-bold uppercase">Jakarta, ID</p>
+                    <p className="text-[14px] font-mono font-black text-white">{times.jakarta}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-[9px] text-slate-500 font-bold uppercase">Algiers, DZ</p>
-                  <p className="text-[14px] font-mono font-black text-white">{times.algiers}</p>
+                {weather?.jakarta && (
+                  <div className="text-right flex flex-col items-end">
+                    <div className="flex items-center justify-end gap-1.5 mb-0.5">
+                      {getWeatherIcon(weather.jakarta.desc)}
+                      <p className="text-[14px] font-mono font-bold text-orange-400">{weather.jakarta.temp}°C</p>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[8px] text-slate-600 font-bold uppercase truncate max-w-[60px]">{weather.jakarta.desc}</span>
+                      <div className="flex items-center gap-1 border-l border-white/10 pl-1.5">
+                        <Wind size={8} className="text-slate-500" />
+                        <span className={cn("text-[8px] font-black", getAQIInfo(weather.jakarta.aqi).color)}>AQI {weather.jakarta.aqi || '--'}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center justify-between p-3 rounded-lg bg-black/20 border border-white/5 group hover:bg-white/[0.02] transition-colors">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500">
+                    <span className="font-bold text-[10px]">ALG</span>
+                  </div>
+                  <div>
+                    <p className="text-[9px] text-slate-500 font-bold uppercase">Algiers, DZ</p>
+                    <p className="text-[14px] font-mono font-black text-white">{times.algiers}</p>
+                  </div>
+                </div>
+                {weather?.algiers && (
+                  <div className="text-right flex flex-col items-end">
+                    <div className="flex items-center justify-end gap-1.5 mb-0.5">
+                      {getWeatherIcon(weather.algiers.desc)}
+                      <p className="text-[14px] font-mono font-bold text-blue-400">{weather.algiers.temp}°C</p>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[8px] text-slate-600 font-bold uppercase truncate max-w-[60px]">{weather.algiers.desc}</span>
+                      <div className="flex items-center gap-1 border-l border-white/10 pl-1.5">
+                        <Wind size={8} className="text-slate-500" />
+                        <span className={cn("text-[8px] font-black", getAQIInfo(weather.algiers.aqi).color)}>AQI {weather.algiers.aqi || '--'}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* New Events Section */}
+          <div className="theme-container p-4 md:p-6 bg-emerald-900/5 border-emerald-500/10 flex-1 flex flex-col">
+            <div className="flex items-center justify-between mb-4 shrink-0">
+               <div className="flex items-center gap-2">
+                 <Tag className="text-emerald-500" size={14} />
+                 <h3 className="text-[10px] font-black uppercase tracking-widest text-white">Hub Events</h3>
+               </div>
+               <span className="text-[8px] font-mono text-emerald-500/50 uppercase">Timeline</span>
+            </div>
+            
+            <div className="flex-1 space-y-4 overflow-y-auto custom-scrollbar pr-2 max-h-[300px]">
+              <div>
+                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 px-1">Upcoming & Active</p>
+                <div className="space-y-2">
+                  {upcomingEvents.map(ev => (
+                    <div key={ev.id} className="p-3 rounded-lg bg-black/40 border border-white/5 group hover:border-emerald-500/30 transition-all">
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-2">
+                          {getEventIcon(ev.type, 10)}
+                          <span className="text-[9px] font-bold text-slate-200 uppercase truncate max-w-[120px]">{ev.title}</span>
+                        </div>
+                        <span className="text-[7px] font-mono text-slate-600 uppercase bg-white/5 px-1 rounded">{ev.type}</span>
+                      </div>
+                      <p className="text-[8px] text-slate-500 font-mono italic">{formatDate(ev.startDate)} - {formatDate(ev.endDate)}</p>
+                      {ev.description && (
+                        <p className="text-[8px] text-slate-600 mt-1 line-clamp-1 group-hover:line-clamp-none transition-all">{ev.description}</p>
+                      )}
+                    </div>
+                  ))}
+                  {upcomingEvents.length === 0 && (
+                    <p className="text-[8px] text-slate-600 italic px-1">No upcoming events</p>
+                  )}
                 </div>
               </div>
-              {weather?.algiers && (
-                <div className="text-right flex flex-col items-end">
-                  <div className="flex items-center justify-end gap-1.5 mb-0.5">
-                    {getWeatherIcon(weather.algiers.desc)}
-                    <p className="text-[14px] font-mono font-bold text-blue-400">{weather.algiers.temp}°C</p>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[8px] text-slate-600 font-bold uppercase truncate max-w-[60px]">{weather.algiers.desc}</span>
-                    <div className="flex items-center gap-1 border-l border-white/10 pl-1.5">
-                      <Wind size={8} className="text-slate-500" />
-                      <span className={cn("text-[8px] font-black", getAQIInfo(weather.algiers.aqi).color)}>AQI {weather.algiers.aqi || '--'}</span>
-                    </div>
+
+              {pastEvents.length > 0 && (
+                <div>
+                  <p className="text-[9px] font-black text-slate-700 uppercase tracking-widest mb-2 px-1">Past Events</p>
+                  <div className="space-y-2 opacity-60">
+                    {pastEvents.map(ev => (
+                      <div key={ev.id} className="p-2 rounded-lg bg-black/20 border border-white/5">
+                        <div className="flex items-center gap-2 mb-1">
+                          {getEventIcon(ev.type, 8)}
+                          <span className="text-[8px] font-bold text-slate-400 uppercase truncate">{ev.title}</span>
+                        </div>
+                        <p className="text-[7px] text-slate-600 font-mono italic">{formatDate(ev.startDate)}</p>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}

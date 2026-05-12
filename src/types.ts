@@ -18,6 +18,15 @@ export interface Scheduling {
   status: ScheduleStatus;
 }
 
+export interface HubEvent {
+  id: string;
+  title: string;
+  description?: string;
+  startDate: string;
+  endDate: string;
+  type: 'general' | 'meeting' | 'walkthrough' | 'holiday';
+}
+
 export type FlightStatus = 'Requested' | 'Not Received' | 'Received' | 'Need Action' | 'Not Requested';
 export type FlightType = 'Algeria to Indonesia' | 'Indonesia to Algeria';
 
