@@ -2,8 +2,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot, query } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { FlightRequest, Personnel, Scheduling } from '../types';
-import { PieChart, Pie, Tooltip as RechartsTooltip, ResponsiveContainer, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { Users, Plane, Activity, CheckCircle2, AlertCircle, Clock, Filter, Calendar, Briefcase, LayoutGrid, ArrowRight, ArrowLeft, Download, Info } from 'lucide-react';
+import { PieChart, Pie, Tooltip as RechartsTooltip, ResponsiveContainer, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, AreaChart, Area } from 'recharts';
+import { Users, Plane, Activity, CheckCircle2, AlertCircle, Clock, Filter, Calendar, Briefcase, LayoutGrid, ArrowRight, ArrowLeft, Download, Info, Globe, Sun, Cloud, CloudRain, CloudSnow, CloudLightning, CloudDrizzle, CloudFog, Wind } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn, formatDate } from '../lib/utils';
 import * as XLSX from 'xlsx';
@@ -40,6 +40,96 @@ export function Dashboard({ isGuest }: DashboardProps) {
   const [summaryPersonnel, setSummaryPersonnel] = useState<string>('ALL');
   const [summaryMonth, setSummaryMonth] = useState<string>('ALL');
   const [summaryStatus, setSummaryStatus] = useState<string>('ALL');
+
+  // Helper for weather icons
+  const getWeatherIcon = (desc: string = '') => {
+    const d = desc.toLowerCase();
+    if (d.includes('sun') || d.includes('clear')) return <Sun size={12} className="text-amber-400" />;
+    if (d.includes('lightning') || d.includes('thunder')) return <CloudLightning size={12} className="text-yellow-400" />;
+    if (d.includes('rain') || d.includes('shower')) return <CloudRain size={12} className="text-blue-400" />;
+    if (d.includes('drizzle')) return <CloudDrizzle size={12} className="text-blue-300" />;
+    if (d.includes('snow')) return <CloudSnow size={12} className="text-white" />;
+    if (d.includes('fog') || d.includes('mist')) return <CloudFog size={12} className="text-slate-400" />;
+    return <Cloud size={12} className="text-slate-300" />;
+  };
+
+  const getAQIInfo = (aqi: number) => {
+    if (!aqi) return { label: 'N/A', color: 'text-slate-500' };
+    if (aqi <= 50) return { label: 'Good', color: 'text-emerald-400' };
+    if (aqi <= 100) return { label: 'Moderate', color: 'text-yellow-400' };
+    if (aqi <= 150) return { label: 'Unhealthy SG', color: 'text-orange-400' };
+    if (aqi <= 200) return { label: 'Unhealthy', color: 'text-rose-400' };
+    if (aqi <= 300) return { label: 'Very Unhealthy', color: 'text-purple-400' };
+    return { label: 'Hazardous', color: 'text-rose-600' };
+  };
+
+  // World Clocks & Weather State
+  const [times, setTimes] = useState({ jakarta: '', algiers: '' });
+  const [weather, setWeather] = useState<any>(null);
+
+  useEffect(() => {
+    const updateClocks = () => {
+      const now = new Date();
+      setTimes({
+        jakarta: now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }),
+        algiers: now.toLocaleTimeString('en-GB', { timeZone: 'Africa/Algiers', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+      });
+    };
+
+    updateClocks();
+    const timer = setInterval(updateClocks, 1000);
+
+    // Dynamic Weather & AQI Fetch
+    const fetchEnvironmentData = async () => {
+      try {
+        const [jkRes, alRes] = await Promise.all([
+          fetch('https://wttr.in/Jakarta?format=j1'),
+          fetch('https://wttr.in/Algiers?format=j1')
+        ]);
+        const jkData = await jkRes.json();
+        const alData = await alRes.json();
+        
+        // AQI Data (WAQI)
+        // Note: Using demo token. In production, use VITE_WAQI_TOKEN
+        let jkAQI = 0;
+        let alAQI = 0;
+        try {
+          const [jkAqiRes, alAqiRes] = await Promise.all([
+            fetch('https://api.waqi.info/feed/jakarta/?token=demo'),
+            fetch('https://api.waqi.info/feed/algiers/?token=demo')
+          ]);
+          const jkAQIData = await jkAqiRes.json();
+          const alAQIData = await alAqiRes.json();
+          if (jkAQIData.status === 'ok') jkAQI = jkAQIData.data.aqi;
+          if (alAQIData.status === 'ok') alAQI = alAQIData.data.aqi;
+        } catch (aqiError) {
+          console.error("AQI fetch failed", aqiError);
+        }
+
+        setWeather({
+          jakarta: { 
+            temp: jkData.current_condition[0].temp_C, 
+            desc: jkData.current_condition[0].weatherDesc[0].value,
+            aqi: jkAQI
+          },
+          algiers: { 
+            temp: alData.current_condition[0].temp_C, 
+            desc: alData.current_condition[0].weatherDesc[0].value,
+            aqi: alAQI
+          }
+        });
+      } catch (e) {
+        console.error("Weather fetch failed", e);
+      }
+    };
+    fetchEnvironmentData();
+    const weatherTimer = setInterval(fetchEnvironmentData, 1800000); // Update every 30 mins
+
+    return () => {
+      clearInterval(timer);
+      clearInterval(weatherTimer);
+    };
+  }, []);
 
   // Helper for status resolution used in both stats and rendering
   const getEffectiveStatus = (status: string, requestedDate?: string | null) => {
@@ -366,6 +456,233 @@ export function Dashboard({ isGuest }: DashboardProps) {
             </div>
           </motion.div>
         ))}
+      </div>
+
+      {/* Global Operations & Group Deployment */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+        {/* World Clocks & Weather */}
+        <div className="lg:col-span-1 theme-container bg-gradient-to-br from-blue-900/10 to-transparent border-blue-500/10 p-4 md:p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Globe className="text-blue-500" size={14} />
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-white">Global Operations</h3>
+          </div>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between p-3 rounded-lg bg-black/20 border border-white/5 group hover:bg-white/[0.02] transition-colors">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500">
+                  <span className="font-bold text-[10px]">JKT</span>
+                </div>
+                <div>
+                  <p className="text-[9px] text-slate-500 font-bold uppercase">Jakarta, ID</p>
+                  <p className="text-[14px] font-mono font-black text-white">{times.jakarta}</p>
+                </div>
+              </div>
+              {weather?.jakarta && (
+                <div className="text-right flex flex-col items-end">
+                  <div className="flex items-center justify-end gap-1.5 mb-0.5">
+                    {getWeatherIcon(weather.jakarta.desc)}
+                    <p className="text-[14px] font-mono font-bold text-orange-400">{weather.jakarta.temp}°C</p>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[8px] text-slate-600 font-bold uppercase truncate max-w-[60px]">{weather.jakarta.desc}</span>
+                    <div className="flex items-center gap-1 border-l border-white/10 pl-1.5">
+                      <Wind size={8} className="text-slate-500" />
+                      <span className={cn("text-[8px] font-black", getAQIInfo(weather.jakarta.aqi).color)}>AQI {weather.jakarta.aqi || '--'}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center justify-between p-3 rounded-lg bg-black/20 border border-white/5 group hover:bg-white/[0.02] transition-colors">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500">
+                  <span className="font-bold text-[10px]">ALG</span>
+                </div>
+                <div>
+                  <p className="text-[9px] text-slate-500 font-bold uppercase">Algiers, DZ</p>
+                  <p className="text-[14px] font-mono font-black text-white">{times.algiers}</p>
+                </div>
+              </div>
+              {weather?.algiers && (
+                <div className="text-right flex flex-col items-end">
+                  <div className="flex items-center justify-end gap-1.5 mb-0.5">
+                    {getWeatherIcon(weather.algiers.desc)}
+                    <p className="text-[14px] font-mono font-bold text-blue-400">{weather.algiers.temp}°C</p>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[8px] text-slate-600 font-bold uppercase truncate max-w-[60px]">{weather.algiers.desc}</span>
+                    <div className="flex items-center gap-1 border-l border-white/10 pl-1.5">
+                      <Wind size={8} className="text-slate-500" />
+                      <span className={cn("text-[8px] font-black", getAQIInfo(weather.algiers.aqi).color)}>AQI {weather.algiers.aqi || '--'}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Fleet Rotation Matrix & Operational Continuity */}
+        <div className="lg:col-span-2 theme-container overflow-hidden p-0 flex flex-col xl:flex-row bg-[#0d0d0f]">
+          {/* Left: Rotation Matrix */}
+          <div className="w-full xl:w-[45%] p-4 md:p-6 border-b xl:border-b-0 xl:border-r border-white/5 bg-white/[0.01]">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-2">
+                <LayoutGrid className="text-emerald-500" size={14} />
+                <h3 className="text-[10px] font-black uppercase tracking-widest text-white">Rotation Matrix</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                <span className="text-[8px] text-slate-500 font-bold uppercase">Active</span>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-3">
+              {uniqueGroups.filter(g => g && g !== 'ALL').map(group => {
+                const members = personnel.filter(p => p.rosterGroup === group);
+                const today = new Date().toISOString().split('T')[0];
+                const groupSchedules = schedules.filter(s => 
+                  members.some(m => m.id === s.personnelId) && 
+                  today >= s.startDate && today <= s.endDate
+                );
+                
+                const onDuty = groupSchedules.filter(s => s.status === 'ON_DUTY').length;
+                const inTransit = groupSchedules.filter(s => s.status === 'IN_TRANSIT').length;
+                const offDuty = groupSchedules.filter(s => s.status === 'OFF_DUTY').length;
+                
+                const dominantStatus = onDuty > 0 ? 'ON_DUTY' : inTransit > 0 ? 'IN_TRANSIT' : 'OFF_DUTY';
+                const statusColor = dominantStatus === 'ON_DUTY' ? 'text-emerald-400' : dominantStatus === 'IN_TRANSIT' ? 'text-amber-400' : 'text-blue-400';
+                const bgColor = dominantStatus === 'ON_DUTY' ? 'bg-emerald-500/10' : dominantStatus === 'IN_TRANSIT' ? 'bg-amber-500/10' : 'bg-blue-500/10';
+
+                return (
+                  <div key={group} className={cn("p-3 rounded-lg border border-white/5 transition-all hover:border-white/20", bgColor)}>
+                    <div className="flex justify-between items-start mb-2">
+                      <span className="text-[12px] font-black text-white">{group.startsWith('Group') ? group.replace('Group ', 'GP-') : `GP-${group}`}</span>
+                      <span className={cn("text-[8px] font-mono font-bold uppercase", statusColor)}>
+                        {dominantStatus.replace('_', ' ')}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex -space-x-1.5">
+                        {members.slice(0, 3).map((p, i) => (
+                          <div key={p.id} className="w-5 h-5 rounded-full border-2 border-[#0d0d0f] bg-slate-800 flex items-center justify-center text-[7px] text-white font-bold">
+                            {p.fullName.charAt(0)}
+                          </div>
+                        ))}
+                        {members.length > 3 && (
+                          <div className="w-5 h-5 rounded-full border-2 border-[#0d0d0f] bg-slate-700 flex items-center justify-center text-[6px] text-slate-400 font-bold">
+                            +{members.length - 3}
+                          </div>
+                        )}
+                      </div>
+                      <span className="text-[10px] font-mono text-white/50">{members.length} PX</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Right: Transit Pulse Chart */}
+          <div className="flex-1 p-4 md:p-6 flex flex-col">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Plane className="text-blue-500" size={14} />
+                <h3 className="text-[10px] font-black uppercase tracking-widest text-white">Logistics Pulse</h3>
+              </div>
+              <div className="flex gap-2">
+                 <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 rounded-sm bg-blue-500/40"></div>
+                    <span className="text-[8px] text-slate-600 font-bold uppercase">DZ-ID</span>
+                 </div>
+                 <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 rounded-sm bg-emerald-500/40"></div>
+                    <span className="text-[8px] text-slate-600 font-bold uppercase">ID-DZ</span>
+                 </div>
+              </div>
+            </div>
+
+            <div className="h-32 mb-4">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={[...availableMonths].sort().map(m => ({
+                  month: formatPeriod(m),
+                  dz_id: allFlights.filter(f => f.requestedDateDZtoID?.startsWith(m)).length,
+                  id_dz: allFlights.filter(f => f.requestedDateIDtoDZ?.startsWith(m)).length,
+                })).slice(0, 12)}>
+                  <defs>
+                    <linearGradient id="colorDz" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                    </linearGradient>
+                    <linearGradient id="colorId" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.02)" vertical={false} />
+                  <XAxis 
+                    dataKey="month" 
+                    stroke="rgba(255,255,255,0.2)" 
+                    fontSize={7} 
+                    tickLine={false} 
+                    axisLine={false}
+                    interval={1}
+                  />
+                  <YAxis hide />
+                  <RechartsTooltip 
+                    contentStyle={{ backgroundColor: '#111', border: 'none', borderRadius: '4px', fontSize: '9px' }}
+                  />
+                  <Area type="monotone" dataKey="dz_id" stroke="#3b82f6" fillOpacity={1} fill="url(#colorDz)" />
+                  <Area type="monotone" dataKey="id_dz" stroke="#10b981" fillOpacity={1} fill="url(#colorId)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 mt-auto pt-4 border-t border-white/5">
+              <div className="p-2">
+                <p className="text-[8px] text-slate-500 font-black uppercase mb-1">Total Movs ({new Date().getFullYear()})</p>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-xl font-mono text-white font-black">
+                    {allFlights.filter(f => {
+                       const yr = new Date().getFullYear().toString();
+                       return f.requestedDateDZtoID?.startsWith(yr) || f.requestedDateIDtoDZ?.startsWith(yr);
+                    }).length}
+                  </span>
+                  <span className="text-[8px] text-emerald-500 font-bold">PAX</span>
+                </div>
+              </div>
+              <div className="p-2 border-l border-white/5 relative group/info">
+                <div className="flex items-center gap-1 mb-1">
+                  <p className="text-[8px] text-slate-500 font-black uppercase">Pipeline Health</p>
+                  <Info size={10} className="text-slate-600 cursor-help" />
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-xl font-mono text-white font-black">
+                    {(() => {
+                      const currentMonth = new Date().toISOString().substring(0, 7);
+                      const currentFlights = allFlights.filter(f => 
+                        f.requestedDateDZtoID?.startsWith(currentMonth) || 
+                        f.requestedDateIDtoDZ?.startsWith(currentMonth)
+                      );
+                      if (currentFlights.length === 0) return "100%";
+                      const booked = currentFlights.filter(f => {
+                        const dzidReady = !f.requestedDateDZtoID || f.statusDZtoID === 'Received';
+                        const iddzReady = !f.requestedDateIDtoDZ || f.statusIDtoDZ === 'Received';
+                        return dzidReady && iddzReady;
+                      }).length;
+                      return `${Math.round((booked / currentFlights.length) * 100)}%`;
+                    })()}
+                  </span>
+                  <span className="text-[8px] text-blue-500 font-bold uppercase">READY</span>
+                </div>
+                <div className="absolute bottom-full mb-2 left-0 w-48 bg-black/90 border border-white/10 p-2 rounded text-[8px] text-slate-400 invisible group-hover/info:visible z-50">
+                  <p className="font-bold text-white mb-1 uppercase text-[9px]">Ready Status Definition:</p>
+                   Calculated based on successfully booked (Received) tickets vs requested flights for the current month. 100% indicates all required logistics are fulfilled and verified.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
