@@ -432,8 +432,8 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
     return (
       <div className="overflow-x-auto md:overflow-x-visible custom-scrollbar">
         <div className="grid grid-cols-7 border-t border-l border-white/5 min-w-[320px] md:min-w-0">
-          {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => (
-            <div key={d} className="bg-black/40 border-b border-r border-white/5 py-2 text-center text-[8px] md:text-[9px] font-black text-slate-500 tracking-widest">{d}</div>
+          {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, idx) => (
+            <div key={`${d}-${idx}`} className="bg-black/40 border-b border-r border-white/5 py-2 text-center text-[8px] md:text-[9px] font-black text-slate-500 tracking-widest">{d}</div>
           ))}
           {days}
         </div>

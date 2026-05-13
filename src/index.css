@@ -6,6 +6,56 @@
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
+/* Leaflet Dark Mode Adjustments */
+.leaflet-container {
+  background: #0d0d0f !important;
+  border-radius: 1rem;
+}
+
+.leaflet-tile {
+  filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
+}
+
+.leaflet-popup-content-wrapper, .leaflet-popup-tip {
+  background-color: #ffffff !important;
+  color: #0d0d0f !important;
+  border: 1px solid rgba(0,0,0,0.1);
+  box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5);
+}
+
+.leaflet-popup-content {
+  margin: 0 !important;
+  line-height: normal !important;
+}
+
+.leaflet-bar {
+  border: 1px solid rgba(255,255,255,0.1) !important;
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.3) !important;
+}
+
+.leaflet-bar a {
+  background-color: #111114 !important;
+  color: #94a3b8 !important;
+  border-bottom: 1px solid rgba(255,255,255,0.05) !important;
+}
+
+.leaflet-bar a:hover {
+  background-color: #1a1a1e !important;
+  color: #ffffff !important;
+}
+
+.leaflet-tooltip {
+  background-color: #ffffff !important;
+  border: 1px solid rgba(0,0,0,0.1) !important;
+  border-radius: 6px !important;
+  padding: 2px 6px !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
+}
+
+.leaflet-tooltip-top:before {
+  border-top-color: #ffffff !important;
+}
+
 @layer base {
   :root {
     --theme-bg: #0a0a0c;

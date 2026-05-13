@@ -8,7 +8,10 @@
         "fullName": { "type": "string" },
         "title": { "type": "string" },
         "email": { "type": "string" },
-        "rosterGroup": { "type": "string" }
+        "rosterGroup": { "type": "string" },
+        "lat": { "type": "number" },
+        "lng": { "type": "number" },
+        "lastLocationUpdate": { "type": "object" }
       },
       "required": ["fullName", "title", "email", "rosterGroup"]
     },

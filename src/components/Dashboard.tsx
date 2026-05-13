@@ -9,6 +9,8 @@ import { cn, formatDate } from '../lib/utils';
 import * as XLSX from 'xlsx';
 import { toBlob } from 'html-to-image';
 
+import { PersonnelMap } from './PersonnelMap';
+
 interface DashboardProps {
   isGuest?: boolean;
 }
@@ -615,6 +617,47 @@ export function Dashboard({ isGuest }: DashboardProps) {
           </motion.div>
         ))}
       </div>
+
+      {/* Real-Time Operational Map */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="space-y-4"
+      >
+        <div className="flex items-center justify-between px-2">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500 border border-emerald-500/20">
+              <Globe size={16} />
+            </div>
+            <div>
+              <h2 className="text-[14px] font-black text-white uppercase tracking-[0.2em]">Deployment Intelligence</h2>
+              <p className="text-[10px] text-slate-500 uppercase font-bold">Real-time asset & personnel tracking across MLN & Hassi Messaoud</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-4 bg-black/40 border border-white/5 rounded-full px-4 py-1.5">
+             <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_5px_rgba(16,185,129,0.8)]"></div>
+                <span className="text-[9px] font-black text-slate-400 uppercase">Live Sensor Mesh</span>
+             </div>
+          </div>
+        </div>
+        
+        <PersonnelMap 
+          onDutyPersonnel={personnel.filter(p => {
+             const now = new Date();
+             now.setHours(0,0,0,0);
+             return schedules.some(s => {
+               const start = toDate(s.startDate);
+               const end = toDate(s.endDate);
+               if (!start || !end) return false;
+               return s.personnelId === p.id && 
+                      s.status === 'ON_DUTY' && 
+                      now >= start && 
+                      now <= end;
+             });
+          })} 
+        />
+      </motion.div>
 
       {/* Main Grid Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">

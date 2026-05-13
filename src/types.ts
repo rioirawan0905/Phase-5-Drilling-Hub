@@ -6,6 +6,9 @@ export interface Personnel {
   rosterGroup: string;
   employeeId?: string;
   phone?: string;
+  lat?: number;
+  lng?: number;
+  lastLocationUpdate?: any;
 }
 
 export type ScheduleStatus = 'ON_DUTY' | 'OFF_DUTY' | 'TRANSIT';

@@ -16,6 +16,8 @@ const personnelSchema = z.object({
   title: z.string().min(2, 'Title is too short'),
   email: z.string().email('Invalid email address'),
   rosterGroup: z.string().min(1, 'Roster Group is required'),
+  lat: z.any().optional(),
+  lng: z.any().optional(),
 });
 
 type PersonnelFormData = z.infer<typeof personnelSchema>;
@@ -48,10 +50,16 @@ export function PersonnelList({ isGuest }: PersonnelListProps) {
 
   const onSubmit = async (data: PersonnelFormData) => {
     try {
+      const formattedData = {
+        ...data,
+        lat: data.lat ? Number(data.lat) : null,
+        lng: data.lng ? Number(data.lng) : null,
+      };
+
       if (editingPersonnel) {
-        await updateDoc(doc(db, 'personnel', editingPersonnel.id), data);
+        await updateDoc(doc(db, 'personnel', editingPersonnel.id), formattedData);
       } else {
-        await addDoc(collection(db, 'personnel'), data);
+        await addDoc(collection(db, 'personnel'), formattedData);
       }
       handleCloseModal();
     } catch (error) {
@@ -65,6 +73,8 @@ export function PersonnelList({ isGuest }: PersonnelListProps) {
     setValue('title', p.title);
     setValue('email', p.email);
     setValue('rosterGroup', p.rosterGroup);
+    setValue('lat', p.lat);
+    setValue('lng', p.lng);
     setIsModalOpen(true);
   };
 
@@ -256,6 +266,17 @@ export function PersonnelList({ isGuest }: PersonnelListProps) {
                     <option value="Others">Others</option>
                   </select>
                   {errors.rosterGroup && <p className="text-[10px] text-red-500">{errors.rosterGroup.message}</p>}
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-slate-500 uppercase font-bold px-1">Latitude (Decimal)</label>
+                    <input {...register('lat')} step="0.000001" type="number" placeholder="e.g. 31.6730" className="w-full bg-[#16161a] border border-white/5 px-4 py-2.5 text-sm text-white rounded-lg focus:outline-none focus:border-blue-500/50" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-slate-500 uppercase font-bold px-1">Longitude (Decimal)</label>
+                    <input {...register('lng')} step="0.000001" type="number" placeholder="e.g. 6.0700" className="w-full bg-[#16161a] border border-white/5 px-4 py-2.5 text-sm text-white rounded-lg focus:outline-none focus:border-blue-500/50" />
+                  </div>
                 </div>
                 
                 <div className="flex justify-end gap-3 pt-6">
