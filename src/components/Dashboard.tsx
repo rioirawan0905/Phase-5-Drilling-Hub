@@ -3,13 +3,11 @@ import { collection, onSnapshot, query } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { FlightRequest, Personnel, Scheduling, HubEvent } from '../types';
 import { PieChart, Pie, Tooltip as RechartsTooltip, ResponsiveContainer, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, AreaChart, Area, LabelList } from 'recharts';
-import { Users, Plane, Activity, CheckCircle2, AlertCircle, Clock, Filter, Calendar, Briefcase, LayoutGrid, ArrowRight, ArrowLeft, Download, Info, Globe, Sun, Cloud, CloudRain, CloudSnow, CloudLightning, CloudDrizzle, CloudFog, Wind, Tag, Palmtree, Wrench, Copy, Check, Sparkles, Bot, X, Loader2 } from 'lucide-react';
+import { Users, Plane, Activity, CheckCircle2, AlertCircle, Clock, Filter, Calendar, Briefcase, LayoutGrid, ArrowRight, ArrowLeft, Download, Info, Globe, Sun, Cloud, CloudRain, CloudSnow, CloudLightning, CloudDrizzle, CloudFog, Wind, Tag, Palmtree, Wrench, Copy, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn, formatDate } from '../lib/utils';
 import * as XLSX from 'xlsx';
 import { toBlob } from 'html-to-image';
-import { GoogleGenAI } from '@google/genai';
-import ReactMarkdown from 'react-markdown';
 
 interface DashboardProps {
   isGuest?: boolean;
@@ -54,11 +52,6 @@ export function Dashboard({ isGuest }: DashboardProps) {
   const [summaryPersonnel, setSummaryPersonnel] = useState<string>('ALL');
   const [summaryMonth, setSummaryMonth] = useState<string>('ALL');
   const [summaryStatus, setSummaryStatus] = useState<string>('ALL');
-
-  // AI Report State
-  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
-  const [aiReport, setAiReport] = useState<string | null>(null);
-  const [showReportModal, setShowReportModal] = useState(false);
 
   // Helper for weather icons
   const getWeatherIcon = (desc: string = '') => {
@@ -534,131 +527,56 @@ export function Dashboard({ isGuest }: DashboardProps) {
     }
   };
 
-  const generateAIReport = async () => {
-    setIsGeneratingReport(true);
-    setShowReportModal(true);
-    setAiReport(null);
-
-    const currentMonth = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
-    const currentMonthIso = new Date().toISOString().substring(0, 7);
-    
-    const dashboardData = {
-      month: currentMonth,
-      statistics: {
-        totalPersonnel: stats.totalPersonnel,
-        onDuty: stats.onDutyCount,
-        onDutyPercent: stats.onDutyPercent,
-        pendingFlightRequests: stats.pendingFlights,
-        completedFlightRequests: stats.completedFlights
-      },
-      logistics: {
-        movementsByRoute: routeData,
-        statusDistribution: statusData,
-        monthlyVolume: allFlights.filter(f => 
-          f.requestedDateDZtoID?.startsWith(currentMonthIso) || 
-          f.requestedDateIDtoDZ?.startsWith(currentMonthIso)
-        ).length
-      },
-      upcomingHubEvents: upcomingEvents.slice(0, 5).map(e => ({
-        title: e.title,
-        type: e.type,
-        location: e.location,
-        date: e.startDate
-      }))
-    };
-
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: [
-          {
-            text: `You are a Lead Operations Coordinator for the PHASE 5 Drilling Project.
-            Generate a high-level "PHASE 5 DRILLING: PERSONNEL, FLIGHT & EVENT SUMMARY" report based on current hub telemetry.
-            
-            Format the report in Markdown with these specific technical sections:
-            1. **OPERATIONAL STATUS: PHASE 5**: Overall project readiness and mission critical metrics.
-            2. **PERSONNEL ROSTER ANALYSIS**: Detailed breakdown of crew deployment (On-Duty vs Off-Duty), mobilization rates, and team availability.
-            3. **LOGISTICS & FLIGHT FLOW**: Analysis of transit route efficiency, fulfillment status of flight requests, and current movement bottlenecks.
-            4. **HUB EVENT SYNOPSIS**: Briefing on critical hub milestones, meetings, and scheduled walkthroughs.
-            5. **ACTION ITEMS & MITIGATION**: Professional evaluation of pending tickets or logistical gaps requiring immediate intervention.
-
-            Data Snapshot (JSON):
-            ${JSON.stringify(dashboardData, null, 2)}
-            
-            REPORT REQUIREMENTS:
-            - Use professional, industrial terminology (e.g., "Mobilization", "Force Readiness", "Logistics Latency").
-            - Tone: Military-grade precision, technical, and strictly data-driven.
-            - NO email greetings or sign-offs.
-            - Start directly with the Report Title: "# PHASE 5 DRILLING: OPS SUMMARY - ${dashboardData.month.toUpperCase()}".`
-          }
-        ]
-      });
-
-      setAiReport(response.text || "Failed to generate report content.");
-    } catch (error) {
-      console.error("AI Report Generation Error:", error);
-      setAiReport("Error: Unable to connect to AI engine. Please check your API configuration.");
-    } finally {
-      setIsGeneratingReport(false);
-    }
-  };
-
   return (
     <div className="space-y-6 min-h-screen pb-12">
       {/* Ops Intelligence Bar */}
       <motion.div 
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="theme-container bg-gradient-to-r from-blue-900/10 via-slate-900/5 to-emerald-900/10 border-white/5 p-3 flex flex-wrap items-center justify-between px-6 gap-4"
+        className="theme-container bg-gradient-to-r from-blue-900/10 via-slate-900/5 to-emerald-900/10 border-white/5 p-3 flex flex-wrap items-center justify-center gap-6 md:gap-12"
       >
-        <div className="flex items-center gap-6 md:gap-12 flex-1">
-          <div className="flex items-center gap-3">
-            <Globe className="text-blue-500 animate-pulse-slow" size={14} />
-            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Ops Intelligence</h3>
-          </div>
-
-          <div className="flex items-center gap-8 md:gap-16">
-            {[
-              { id: 'JKT', city: 'Jakarta, ID', time: times.jakarta, weather: weather?.jakarta, color: 'emerald' },
-              { id: 'ALG', city: 'Algiers, DZ', time: times.algiers, weather: weather?.algiers, color: 'blue' }
-            ].map(location => (
-              <div key={location.id} className="hidden sm:flex items-center gap-4 group">
-                <div className="flex items-center gap-3">
-                  <div className={cn("w-7 h-7 rounded-lg flex items-center justify-center font-black text-[10px] border shadow-xl transition-all group-hover:scale-110", 
-                    location.id === 'JKT' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-blue-500/10 text-blue-400 border-blue-500/20"
-                  )}>
-                    {location.id}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-mono font-black text-white tracking-wider leading-none">{location.time}</p>
-                      <span className="text-[8px] text-slate-600 font-black uppercase tracking-tighter">{location.city}</span>
-                    </div>
-                  </div>
-                </div>
-                
-                {location.weather && (
-                  <div className="hidden lg:flex items-center gap-3 pl-4 border-l border-white/5">
-                    <div className="flex items-center gap-1.5">
-                      {getWeatherIcon(location.weather.desc)}
-                      <span className="text-[11px] font-mono font-black text-slate-300">{location.weather.temp}°C</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
+        <div className="flex items-center gap-3">
+          <Globe className="text-blue-500 animate-pulse-slow" size={14} />
+          <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Ops Intelligence</h3>
         </div>
 
-        <button 
-          onClick={generateAIReport}
-          disabled={isGeneratingReport}
-          className="flex items-center gap-2 px-4 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all shadow-lg hover:shadow-blue-500/10 disabled:opacity-50"
-        >
-          {isGeneratingReport ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
-          AI Report
-        </button>
+        <div className="flex items-center gap-8 md:gap-16">
+          {[
+            { id: 'JKT', city: 'Jakarta, ID', time: times.jakarta, weather: weather?.jakarta, color: 'emerald' },
+            { id: 'ALG', city: 'Algiers, DZ', time: times.algiers, weather: weather?.algiers, color: 'blue' }
+          ].map(location => (
+            <div key={location.id} className="flex items-center gap-4 group">
+              <div className="flex items-center gap-3">
+                <div className={cn("w-7 h-7 rounded-lg flex items-center justify-center font-black text-[10px] border shadow-xl transition-all group-hover:scale-110", 
+                  location.id === 'JKT' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                )}>
+                  {location.id}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-mono font-black text-white tracking-wider leading-none">{location.time}</p>
+                    <span className="text-[8px] text-slate-600 font-black uppercase tracking-tighter">{location.city}</span>
+                  </div>
+                </div>
+              </div>
+              
+              {location.weather && (
+                <div className="flex items-center gap-3 pl-4 border-l border-white/5">
+                  <div className="flex items-center gap-1.5">
+                    {getWeatherIcon(location.weather.desc)}
+                    <span className="text-[11px] font-mono font-black text-slate-300">{location.weather.temp}°C</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[7px] font-black text-slate-600 uppercase leading-none mb-0.5">AQI</span>
+                    <span className={cn("text-[9px] font-black uppercase leading-none", getAQIInfo(location.weather.aqi).color)}>
+                      {location.weather.aqi || '--'}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
       </motion.div>
 
       {/* Metrics Row */}
@@ -1607,94 +1525,6 @@ export function Dashboard({ isGuest }: DashboardProps) {
           )}
         </div>
       </div>
-
-      <AnimatePresence>
-        {showReportModal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-12">
-            <motion.div 
-              initial={{ opacity: 0 }} 
-              animate={{ opacity: 1 }} 
-              exit={{ opacity: 0 }}
-              onClick={() => setShowReportModal(false)}
-              className="absolute inset-0 bg-black/80 backdrop-blur-sm" 
-            />
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-4xl max-h-[85vh] bg-[#0d0d0f] border border-white/10 rounded-2xl shadow-2xl flex flex-col overflow-hidden"
-            >
-              <div className="p-6 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
-                    <Sparkles size={20} className="text-white" />
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-black text-white uppercase tracking-widest">Monthly Ops Report</h2>
-                    <p className="text-[10px] text-slate-500 uppercase font-black">AI-Powered Hub Analysis • {new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}</p>
-                  </div>
-                </div>
-                <button 
-                  onClick={() => setShowReportModal(false)}
-                  className="p-2 hover:bg-white/5 rounded-lg text-slate-500 transition-colors"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-
-              <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-                {isGeneratingReport ? (
-                  <div className="h-full flex flex-col items-center justify-center py-20">
-                    <div className="relative mb-6">
-                      <div className="absolute inset-0 bg-blue-500/20 blur-xl rounded-full animate-pulse" />
-                      <Loader2 size={48} className="text-blue-500 animate-spin relative" />
-                    </div>
-                    <h3 className="text-sm font-black text-white uppercase tracking-[0.2em] mb-2">Synthesizing Hub Data</h3>
-                    <p className="text-[10px] text-slate-500 uppercase font-bold text-center max-w-[250px]">
-                      Analyzing personnel metrics, flight logistics, and upcoming hub events for trends...
-                    </p>
-                  </div>
-                ) : (
-                  <div className="prose prose-invert prose-blue max-w-none prose-sm">
-                    <div className="markdown-body">
-                      {aiReport ? (
-                        <ReactMarkdown>{aiReport}</ReactMarkdown>
-                      ) : (
-                        <p className="text-slate-500 font-mono italic">Report pending generation...</p>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="p-4 border-t border-white/5 bg-black/40 flex justify-end gap-3">
-                <button 
-                  onClick={() => setShowReportModal(false)}
-                  className="px-6 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 text-[10px] font-black uppercase tracking-widest transition-all"
-                >
-                  Close
-                </button>
-                {!isGeneratingReport && (
-                  <button 
-                    onClick={() => {
-                        const blob = new Blob([aiReport || ''], { type: 'text/plain' });
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `Ops_Report_${new Date().toISOString().substring(0, 10)}.txt`;
-                        a.click();
-                    }}
-                    className="flex items-center gap-2 px-6 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-blue-500/20"
-                  >
-                    <Download size={14} />
-                    Download Draft
-                  </button>
-                )}
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
