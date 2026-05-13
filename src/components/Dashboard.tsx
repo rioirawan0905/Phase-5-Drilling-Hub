@@ -3,10 +3,11 @@ import { collection, onSnapshot, query } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { FlightRequest, Personnel, Scheduling, HubEvent } from '../types';
 import { PieChart, Pie, Tooltip as RechartsTooltip, ResponsiveContainer, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, AreaChart, Area, LabelList } from 'recharts';
-import { Users, Plane, Activity, CheckCircle2, AlertCircle, Clock, Filter, Calendar, Briefcase, LayoutGrid, ArrowRight, ArrowLeft, Download, Info, Globe, Sun, Cloud, CloudRain, CloudSnow, CloudLightning, CloudDrizzle, CloudFog, Wind, Tag, Palmtree, Wrench } from 'lucide-react';
+import { Users, Plane, Activity, CheckCircle2, AlertCircle, Clock, Filter, Calendar, Briefcase, LayoutGrid, ArrowRight, ArrowLeft, Download, Info, Globe, Sun, Cloud, CloudRain, CloudSnow, CloudLightning, CloudDrizzle, CloudFog, Wind, Tag, Palmtree, Wrench, Copy, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn, formatDate } from '../lib/utils';
 import * as XLSX from 'xlsx';
+import { toBlob } from 'html-to-image';
 
 interface DashboardProps {
   isGuest?: boolean;
@@ -480,6 +481,50 @@ export function Dashboard({ isGuest }: DashboardProps) {
     const diffTime = flightDate.getTime() - today.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     return diffDays;
+  };
+
+  const [copying, setCopying] = useState<string | null>(null);
+
+  const copyAsImage = async (elementId: string) => {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    setCopying(elementId);
+    
+    try {
+      if (!navigator.clipboard || !window.ClipboardItem) {
+        throw new Error('Clipboard API not supported');
+      }
+
+      // Modern browsers (like Safari) prefer passing a promise to ClipboardItem
+      // to maintain the "user gesture" context during async operations.
+      const blobPromise = toBlob(el, { 
+        backgroundColor: '#0d0d0f', 
+        pixelRatio: 2,
+        cacheBust: true
+      }).then(blob => {
+        if (!blob) throw new Error('Blob creation failed');
+        return blob;
+      });
+
+      await navigator.clipboard.write([
+        new ClipboardItem({ 'image/png': blobPromise })
+      ]);
+    } catch (e) {
+      console.error('Initial copy method failed, trying fallback:', e);
+      try {
+        // Fallback for browsers that don't support promise-based ClipboardItem
+        const blob = await toBlob(el, { backgroundColor: '#0d0d0f', pixelRatio: 2 });
+        if (!blob) throw new Error('Fallback blob creation failed');
+        await navigator.clipboard.write([
+          new ClipboardItem({ [blob.type]: blob })
+        ]);
+      } catch (err2) {
+        console.error('All copy methods failed:', err2);
+        alert('Could not copy image. This is often caused by security restrictions in embedded previews. Try opening the app in a new tab.');
+      }
+    } finally {
+      setTimeout(() => setCopying(null), 2000);
+    }
   };
 
   return (
@@ -1019,21 +1064,58 @@ export function Dashboard({ isGuest }: DashboardProps) {
                });
                const isOnDuty = activeSched?.status?.toUpperCase() === 'ON_DUTY';
                const isTransit = activeSched?.status?.toUpperCase() === 'TRANSIT';
-               return { p, isOnDuty, isTransit };
+               
+               let daysRemainingText = '';
+               if (isOnDuty && activeSched) {
+                 const endDate = toDate(activeSched.endDate);
+                 if (endDate) {
+                   endDate.setHours(0,0,0,0);
+                   const diff = endDate.getTime() - now.getTime();
+                   const days = Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+                   daysRemainingText = `${days}d Left`;
+                 }
+               } else {
+                 // Remaining Off Duty = Next Start of On Duty Date - Today
+                 const nextSched = schedules
+                   .filter(s => s.personnelId === p.id && s.status?.toUpperCase() === 'ON_DUTY')
+                   .map(s => ({ ...s, start: toDate(s.startDate) }))
+                   .filter(s => s.start && s.start.getTime() > now.getTime())
+                   .sort((a,b) => a.start!.getTime() - b.start!.getTime())[0];
+                 
+                 if (nextSched && nextSched.start) {
+                   const nextStart = new Date(nextSched.start);
+                   nextStart.setHours(0,0,0,0);
+                   const diff = nextStart.getTime() - now.getTime();
+                   const days = Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)));
+                   daysRemainingText = `${days}d Off`;
+                 }
+               }
+
+               return { p, isOnDuty, isTransit, daysRemainingText };
             })
             .sort((a,b) => {
               if (a.isOnDuty && !b.isOnDuty) return -1;
               if (!a.isOnDuty && b.isOnDuty) return 1;
               return 0;
             })
-            .map(({ p, isOnDuty, isTransit }) => (
+            .map(({ p, isOnDuty, isTransit, daysRemainingText }) => (
               <div key={p.id} className="flex items-center justify-between p-2.5 rounded bg-white/[0.01] border border-white/5 hover:bg-white/[0.03] transition-all">
                 <div className="flex items-center gap-2.5">
                   <div className={cn(
                     "w-1.5 h-1.5 rounded-full",
                     isOnDuty ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)] animate-pulse" : isTransit ? "bg-blue-400" : "bg-slate-700"
                   )} />
-                  <p className="text-[11px] font-bold text-slate-200 uppercase tracking-tighter truncate max-w-[120px]">{p.fullName}</p>
+                  <div>
+                    <p className="text-[11px] font-bold text-slate-200 uppercase tracking-tighter truncate max-w-[120px]">{p.fullName}</p>
+                    {daysRemainingText && (
+                      <p className={cn(
+                        "text-[8px] font-mono font-bold uppercase tracking-tighter leading-none mt-0.5",
+                        isOnDuty ? "text-emerald-500/60" : "text-slate-500"
+                      )}>
+                        {daysRemainingText}
+                      </p>
+                    )}
+                  </div>
                 </div>
                 <span className={cn(
                   "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter border",
@@ -1093,13 +1175,22 @@ export function Dashboard({ isGuest }: DashboardProps) {
         </div>
 
         {/* Awaiting Fulfillment (Feed) */}
-        <div className="lg:col-span-2 theme-card p-5 flex flex-col">
+        <div id="awaiting-ops-action" className="lg:col-span-2 theme-card p-5 flex flex-col">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <Clock size={12} className="text-rose-500" />
               <h3 className="text-[10px] font-black text-white uppercase tracking-widest">Awaiting Ops Action</h3>
             </div>
-            <span className="text-[8px] font-mono text-rose-500/50 uppercase">Urgent Priority</span>
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={() => copyAsImage('awaiting-ops-action')}
+                className="p-1 rounded bg-white/5 border border-white/5 hover:bg-white/10 transition-colors text-slate-500 hover:text-white"
+                title="Copy as Image"
+              >
+                {copying === 'awaiting-ops-action' ? <Check size={10} /> : <Copy size={10} />}
+              </button>
+              <span className="text-[8px] font-mono text-rose-500/50 uppercase">Urgent Priority</span>
+            </div>
           </div>
           <div className="flex-1 space-y-2 overflow-y-auto custom-scrollbar pr-1 max-h-[300px]">
              {allFlights
@@ -1193,9 +1284,18 @@ export function Dashboard({ isGuest }: DashboardProps) {
       </div>
 
       {/* Manifest Row */}
-      <div className="theme-container overflow-hidden">
+      <div id="flight-requests-summary" className="theme-container overflow-hidden">
         <div className="p-4 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-white">Flight Ticket Requests Summary</h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-white">Flight Ticket Requests Summary</h2>
+            <button 
+              onClick={() => copyAsImage('flight-requests-summary')}
+              className="p-1 rounded bg-white/5 border border-white/5 hover:bg-white/10 transition-colors text-slate-500 hover:text-white"
+              title="Copy as Image"
+            >
+              {copying === 'flight-requests-summary' ? <Check size={12} /> : <Copy size={12} />}
+            </button>
+          </div>
           <div className="flex flex-wrap items-center gap-4">
              <div className="flex items-center gap-2 px-2 py-1 bg-black/40 border border-white/5 rounded-lg text-[9px]">
                 <Users size={10} className="text-slate-500" />
@@ -1263,7 +1363,8 @@ export function Dashboard({ isGuest }: DashboardProps) {
           </div>
         </div>
         <div className="p-0 overflow-x-auto custom-scrollbar">
-          <table className="w-full text-left border-collapse min-w-[800px] md:min-w-0">
+          {/* Desktop Table */}
+          <table className="hidden md:table w-full text-left border-collapse">
             <thead className="text-[11px] text-slate-500 uppercase tracking-widest bg-black/40">
               <tr>
                 <th className="py-3 px-4 font-black border-b border-white/5">Personnel</th>
@@ -1358,6 +1459,64 @@ export function Dashboard({ isGuest }: DashboardProps) {
               })}
             </tbody>
           </table>
+
+          {/* Mobile Card Layout */}
+          <div className="md:hidden divide-y divide-white/5">
+            {filteredSummaryFlights.map((flight) => {
+              const person = personnel.find(p => p.id === flight.personnelId);
+              return (
+                <div key={flight.id} className="p-4 space-y-3">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="text-[13px] text-slate-200 font-bold uppercase tracking-tighter">{person?.fullName || 'Crew member'}</p>
+                      <p className="text-[10px] text-slate-600 font-mono italic">{person?.title}</p>
+                    </div>
+                    <span className="text-[9px] font-mono text-slate-700">ID-{flight.id.slice(0,6).toUpperCase()}</span>
+                  </div>
+                  
+                  <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono">
+                    <Calendar size={12} className="text-slate-700" />
+                    {flight.startDate ? `${formatDate(flight.startDate)} — ${formatDate(flight.endDate)}` : 'Unscheduled'}
+                  </div>
+
+                  <div className="space-y-2 bg-white/[0.02] p-2 rounded-lg border border-white/5">
+                    {flight.requestedDateIDtoDZ && (
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <ArrowLeft size={10} className="text-emerald-500" />
+                          <span className="text-[10px] text-slate-400 font-mono">IDL-ALG ( {formatDate(flight.requestedDateIDtoDZ)} )</span>
+                        </div>
+                        <span className={cn(
+                          "text-[8px] font-black uppercase px-2 py-0.5 rounded border",
+                          getEffectiveStatus(flight.statusIDtoDZ || 'Requested', flight.requestedDateIDtoDZ) === 'Need Action'
+                            ? "text-rose-500 bg-rose-500/10 border-rose-500/20"
+                            : "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
+                        )}>
+                          {getStatusLabel(flight.statusIDtoDZ || 'Requested', flight.requestedDateIDtoDZ)}
+                        </span>
+                      </div>
+                    )}
+                    {flight.requestedDateDZtoID && (
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <ArrowRight size={10} className="text-blue-500" />
+                          <span className="text-[10px] text-slate-400 font-mono">ALG-IDL ( {formatDate(flight.requestedDateDZtoID)} )</span>
+                        </div>
+                        <span className={cn(
+                          "text-[8px] font-black uppercase px-2 py-0.5 rounded border",
+                          getEffectiveStatus(flight.statusDZtoID || 'Requested', flight.requestedDateDZtoID) === 'Need Action'
+                            ? "text-rose-500 bg-rose-500/10 border-rose-500/20"
+                            : "text-blue-400 bg-blue-500/10 border-blue-500/20"
+                        )}>
+                          {getStatusLabel(flight.statusDZtoID || 'Requested', flight.requestedDateDZtoID)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
           {filteredSummaryFlights.length === 0 && (
             <div className="py-20 text-center opacity-20">
               <Plane size={32} className="mx-auto mb-2" />

@@ -358,21 +358,21 @@ export function FlightsList({ isGuest }: FlightsListProps) {
 
       {/* Flight Manifest Theme Container */}
       <div className="theme-container overflow-hidden">
-        <div className="overflow-x-auto custom-scrollbar">
-          <table className="w-full text-left min-w-[800px] md:min-w-0">
+        <div className="overflow-x-auto md:overflow-x-visible custom-scrollbar">
+          {/* Desktop Table */}
+          <table className="hidden md:table w-full text-left min-w-[800px] md:min-w-0">
           <thead className="text-[10px] text-slate-500 uppercase tracking-widest bg-black/20">
             <tr>
               <th className="py-3 px-6 font-normal">Personnel</th>
               <th className="py-3 px-6 font-normal">Duty Period</th>
-              <th className="py-3 px-6 font-normal">Transit Route</th>
-              <th className="py-3 px-6 font-normal">Status</th>
-              <th className="py-3 px-6 font-normal text-right">Control</th>
+              <th className="py-3 px-6 font-normal">Transit Route / Leg Control</th>
+              <th className="py-3 px-6 font-normal text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="text-xs divide-y divide-white/5">
             {filteredFlights.length === 0 ? (
               <tr>
-                <td colSpan={5} className="py-20 text-center text-[10px] uppercase font-mono text-slate-700 tracking-widest">
+                <td colSpan={4} className="py-20 text-center text-[10px] uppercase font-mono text-slate-700 tracking-widest">
                   No active requests in system
                 </td>
               </tr>
@@ -381,15 +381,19 @@ export function FlightsList({ isGuest }: FlightsListProps) {
                 const person = personnel.find(p => p.id === f.personnelId);
                 return (
                   <tr key={f.id} className="hover:bg-white/[0.02] transition-colors group border-b border-white/5">
-                    <td className="py-4 px-6">
+                    <td className="py-4 px-6 align-top">
                       <p className="font-semibold text-white">{person?.fullName || 'UNKNOWN'}</p>
                       <p className="text-[10px] text-slate-500 font-mono italic">{person?.title || 'No Title'}</p>
+                      <div className="mt-2 text-[8px] font-mono text-slate-700">ID-{f.id.slice(0,8).toUpperCase()}</div>
                     </td>
-                    <td className="py-4 px-6 text-slate-400 font-mono whitespace-nowrap">
-                      {f.startDate ? `${formatDate(f.startDate)} — ${formatDate(f.endDate)}` : 'N/A'}
+                    <td className="py-4 px-6 text-slate-400 font-mono whitespace-nowrap align-top">
+                      <div className="flex items-center gap-2">
+                        <Calendar size={10} className="text-slate-700" />
+                        {f.startDate ? `${formatDate(f.startDate)} — ${formatDate(f.endDate)}` : 'N/A'}
+                      </div>
                     </td>
-                    <td className="py-4 px-6" colSpan={3}>
-                      <div className="space-y-4">
+                    <td className="py-4 px-6 align-top">
+                      <div className="space-y-3 min-w-[400px]">
                         {f.requestedDateIDtoDZ && (
                           <div className="flex items-center justify-between p-2 rounded bg-emerald-500/5 border border-emerald-500/10">
                             <div className="flex items-center gap-3">
@@ -463,10 +467,12 @@ export function FlightsList({ isGuest }: FlightsListProps) {
                           </div>
                         )}
                       </div>
+                    </td>
+                    <td className="py-4 px-6 text-right whitespace-nowrap">
                       {!isGuest && (
-                        <div className="flex justify-end gap-3 pt-3">
-                           <button onClick={() => handleEditFlight(f)} className="p-1 px-2 text-[10px] font-bold text-slate-500 hover:text-white uppercase flex items-center gap-1 border border-white/5 rounded"><Pencil size={12} /> Edit</button>
-                           <button onClick={() => setDeleteConfirmId(f.id)} className="p-1 px-2 text-[10px] font-bold text-slate-500 hover:text-rose-500 uppercase flex items-center gap-1 border border-white/5 rounded"><Trash2 size={12} /> Delete</button>
+                        <div className="flex flex-col items-end gap-2">
+                           <button onClick={() => handleEditFlight(f)} className="p-1 px-2 text-[10px] font-bold text-slate-500 hover:text-white uppercase flex items-center gap-1 border border-white/5 rounded w-fit"><Pencil size={11} /> Edit</button>
+                           <button onClick={() => setDeleteConfirmId(f.id)} className="p-1 px-2 text-[10px] font-bold text-slate-500 hover:text-rose-500 uppercase flex items-center gap-1 border border-white/5 rounded w-fit"><Trash2 size={11} /> Delete</button>
                         </div>
                       )}
                     </td>
@@ -476,6 +482,112 @@ export function FlightsList({ isGuest }: FlightsListProps) {
             )}
           </tbody>
         </table>
+
+        {/* Mobile View */}
+        <div className="md:hidden divide-y divide-white/5">
+          {filteredFlights.length === 0 ? (
+            <div className="py-12 text-center text-[10px] uppercase font-mono text-slate-700 tracking-widest px-4">
+              No active requests in system
+            </div>
+          ) : (
+            filteredFlights.sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)).map((f) => {
+              const person = personnel.find(p => p.id === f.personnelId);
+              return (
+                <div key={f.id} className="p-4 space-y-4">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="font-bold text-sm text-white uppercase tracking-tight">{person?.fullName || 'UNKNOWN'}</p>
+                      <p className="text-[10px] text-slate-500 font-mono italic">{person?.title}</p>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[8px] font-mono text-slate-700">ID-{f.id.slice(0,6).toUpperCase()}</div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono bg-white/[0.02] p-2 rounded">
+                    <Calendar size={12} className="text-slate-700" />
+                    {f.startDate ? `${formatDate(f.startDate)} — ${formatDate(f.endDate)}` : 'DATE N/A'}
+                  </div>
+
+                  <div className="space-y-3">
+                    {f.requestedDateIDtoDZ && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <ArrowLeft size={10} className="text-emerald-400" />
+                            <span className="text-[9px] font-black text-emerald-400 uppercase">IDL → ALG</span>
+                          </div>
+                          <span className={cn(
+                            "px-2 py-0.5 rounded text-[8px] font-black uppercase border",
+                            getStatusLabel(f.statusIDtoDZ || 'Requested', f.requestedDateIDtoDZ) === 'Need Action'
+                              ? "bg-rose-500/10 text-rose-500 border-rose-500/20"
+                              : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                          )}>
+                            {getStatusLabel(f.statusIDtoDZ || 'Requested', f.requestedDateIDtoDZ)}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[11px] text-slate-300 font-mono">{formatDate(f.requestedDateIDtoDZ)}</span>
+                          {!isGuest && (
+                            <select 
+                              onChange={(e) => updateTransitStatus(f.id, 'IDtoDZ', e.target.value as FlightStatus)}
+                              value={f.statusIDtoDZ || 'Requested'}
+                              className="bg-black/40 border border-white/5 text-[9px] text-slate-400 px-2 py-1 rounded font-bold uppercase"
+                            >
+                              <option value="Not Requested">Not Requested</option>
+                              <option value="Requested">Requested</option>
+                              <option value="Received">Received</option>
+                            </select>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {f.requestedDateDZtoID && (
+                      <div className="space-y-2 pt-2 border-t border-white/5">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <ArrowRight size={10} className="text-blue-400" />
+                            <span className="text-[9px] font-black text-blue-400 uppercase">ALG → IDL</span>
+                          </div>
+                          <span className={cn(
+                            "px-2 py-0.5 rounded text-[8px] font-black uppercase border",
+                            getStatusLabel(f.statusDZtoID || 'Requested', f.requestedDateDZtoID) === 'Need Action'
+                              ? "bg-rose-500/10 text-rose-500 border-rose-500/20"
+                              : "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                          )}>
+                            {getStatusLabel(f.statusDZtoID || 'Requested', f.requestedDateDZtoID)}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[11px] text-slate-300 font-mono">{formatDate(f.requestedDateDZtoID)}</span>
+                          {!isGuest && (
+                            <select 
+                              onChange={(e) => updateTransitStatus(f.id, 'DZtoID', e.target.value as FlightStatus)}
+                              value={f.statusDZtoID || 'Requested'}
+                              className="bg-black/40 border border-white/5 text-[9px] text-slate-400 px-2 py-1 rounded font-bold uppercase"
+                            >
+                              <option value="Not Requested">Not Requested</option>
+                              <option value="Requested">Requested</option>
+                              <option value="Received">Received</option>
+                            </select>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {!isGuest && (
+                    <div className="flex justify-end gap-3 pt-2">
+                       <button onClick={() => handleEditFlight(f)} className="p-1 px-3 text-[10px] font-bold text-slate-500 hover:text-white uppercase flex items-center gap-1 border border-white/5 rounded bg-white/5"><Pencil size={11} /> Edit</button>
+                       <button onClick={() => setDeleteConfirmId(f.id)} className="p-1 px-3 text-[10px] font-bold text-slate-500 hover:text-rose-500 uppercase flex items-center gap-1 border border-white/5 rounded bg-white/5"><Trash2 size={11} /> Delete</button>
+                    </div>
+                  )}
+                </div>
+              )
+            })
+          )}
+        </div>
       </div>
     </div>
 

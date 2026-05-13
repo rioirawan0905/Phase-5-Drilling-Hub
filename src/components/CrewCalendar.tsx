@@ -430,14 +430,14 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
     }
 
     return (
-      <div className="overflow-x-auto custom-scrollbar">
-        <div className="grid grid-cols-7 border-t border-l border-white/5 min-w-[700px]">
-          {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map(d => (
-          <div key={d} className="bg-black/40 border-b border-r border-white/5 py-2 text-center text-[9px] font-bold text-slate-500 tracking-widest">{d}</div>
-        ))}
-        {days}
+      <div className="overflow-x-auto md:overflow-x-visible custom-scrollbar">
+        <div className="grid grid-cols-7 border-t border-l border-white/5 min-w-[320px] md:min-w-0">
+          {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => (
+            <div key={d} className="bg-black/40 border-b border-r border-white/5 py-2 text-center text-[8px] md:text-[9px] font-black text-slate-500 tracking-widest">{d}</div>
+          ))}
+          {days}
+        </div>
       </div>
-    </div>
     );
   };
 
@@ -455,8 +455,8 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
     });
 
     return (
-      <div className="overflow-x-auto custom-scrollbar">
-        <div className="grid grid-cols-7 border-t border-l border-white/5 h-[600px] min-w-[700px]">
+      <div className="overflow-x-auto md:overflow-x-visible custom-scrollbar">
+        <div className="grid grid-cols-7 border-t border-l border-white/5 h-[450px] md:h-[600px] min-w-[320px] md:min-w-0">
         {weekDays.map(({ date, dateStr }) => (
           <div 
             key={dateStr} 
@@ -859,91 +859,63 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
   return (
     <div className="space-y-6">
       {/* Controls */}
-      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 md:gap-6 mb-8">
-        <div className="flex flex-wrap gap-2 order-2 xl:order-1">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 md:gap-6 mb-8">
+        <div className="flex flex-wrap gap-1.5 md:gap-2 order-2 lg:order-1">
           {(['month', 'week', 'personnel', 'gantt'] as ViewMode[]).map(mode => (
             <button
               key={mode}
               onClick={() => setViewMode(mode)}
               className={cn(
-                "px-3 md:px-5 py-2 md:py-2.5 rounded-xl flex items-center gap-2 md:gap-3 text-[8px] md:text-[10px] font-black uppercase tracking-widest transition-all border shadow-lg flex-1 md:flex-none justify-center",
+                "px-2 md:px-5 py-1.5 md:py-2.5 rounded-lg md:rounded-xl flex items-center gap-1.5 md:gap-3 text-[7px] md:text-[10px] font-black uppercase tracking-widest transition-all border shadow-lg flex-1 md:flex-none justify-center",
                 viewMode === mode 
                   ? "bg-blue-600 border-blue-400 text-white shadow-blue-500/25" 
                   : "bg-theme-container border-white/5 text-slate-500 hover:text-slate-300 hover:bg-white/5"
               )}
             >
-              <div className="hidden xs:block">
-                {mode === 'month' && <CalendarIcon size={14} />}
-                {mode === 'week' && <Clock size={14} />}
-                {mode === 'personnel' && <Users size={14} />}
-                {mode === 'gantt' && <LayoutGrid size={14} />}
+              <div className="hidden sm:block">
+                {mode === 'month' && <CalendarIcon size={12} />}
+                {mode === 'week' && <Clock size={12} />}
+                {mode === 'personnel' && <Users size={12} />}
+                {mode === 'gantt' && <LayoutGrid size={12} />}
               </div>
-              <span>{mode}</span>
+              <span className="truncate">{mode}</span>
             </button>
           ))}
         </div>
 
-        <div className="flex flex-wrap items-center justify-between xl:justify-end gap-4 order-1 xl:order-2 w-full xl:w-auto">
-          <div className="flex items-center gap-2 md:gap-4 flex-1 xl:flex-none justify-between md:justify-start">
-            <h3 className="text-xs md:text-sm font-bold text-[var(--theme-text)] uppercase tracking-widest text-center min-w-[120px] md:min-w-[150px]">
+        <div className="flex flex-wrap items-center justify-between lg:justify-end gap-3 md:gap-4 order-1 lg:order-2 w-full lg:w-auto">
+          <div className="flex items-center gap-2 md:gap-4 flex-1 lg:flex-none justify-between lg:justify-start bg-white/[0.02] border border-white/5 rounded-xl px-3 py-1.5 md:px-0 md:py-0 md:bg-transparent md:border-none">
+            <h3 className="text-[10px] md:text-sm font-black text-[var(--theme-text)] uppercase tracking-widest text-center min-w-[80px] md:min-w-[150px]">
               {viewMode === 'week' 
-                ? `WK OF ${currentDate.toLocaleDateString('default', { month: 'short', day: 'numeric' })}`
+                ? `WK ${currentDate.toLocaleDateString('default', { month: 'short', day: 'numeric' })}`
                 : currentDate.toLocaleString('default', { month: 'short', year: 'numeric' })
               }
             </h3>
             <div className="flex gap-1 shrink-0">
-              <button onClick={viewMode === 'week' ? handlePrevWeek : handlePrevMonth} className="p-1.5 md:p-2 border rounded-lg transition-all" style={{ backgroundColor: 'var(--theme-container)', borderColor: 'var(--theme-border)', color: 'var(--theme-text)' }}><ChevronLeft size={14} /></button>
-              <button onClick={viewMode === 'week' ? handleNextWeek : handleNextMonth} className="p-1.5 md:p-2 border rounded-lg transition-all" style={{ backgroundColor: 'var(--theme-container)', borderColor: 'var(--theme-border)', color: 'var(--theme-text)' }}><ChevronRight size={14} /></button>
+              <button onClick={viewMode === 'week' ? handlePrevWeek : handlePrevMonth} className="p-1 md:p-2 border rounded-lg transition-all" style={{ backgroundColor: 'var(--theme-container)', borderColor: 'var(--theme-border)', color: 'var(--theme-text)' }}><ChevronLeft size={12} /></button>
+              <button onClick={viewMode === 'week' ? handleNextWeek : handleNextMonth} className="p-1 md:p-2 border rounded-lg transition-all" style={{ backgroundColor: 'var(--theme-container)', borderColor: 'var(--theme-border)', color: 'var(--theme-text)' }}><ChevronRight size={12} /></button>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 md:gap-4 shrink-0">
-            <div className="hidden md:flex items-center gap-3 px-4 py-2 bg-black/40 border border-white/5 rounded-xl">
-               <span className="text-[10px] font-black text-slate-500 uppercase">Group</span>
-               <select 
-                 value={filterGroup} 
-                 onChange={(e) => setFilterGroup(e.target.value)}
-                 className="bg-transparent text-white text-[11px] font-bold uppercase focus:outline-none cursor-pointer max-w-[80px]"
-               >
-                 <option value="ALL">ALL</option>
-                 {uniqueGroups.map(g => <option key={g} value={g}>{g}</option>)}
-               </select>
-            </div>
-            <div className="hidden md:flex items-center gap-3 px-4 py-2 bg-black/40 border border-white/5 rounded-xl">
-               <span className="text-[10px] font-black text-slate-500 uppercase">Sort</span>
-               <select 
-                 value={sortBy} 
-                 onChange={(e) => setSortBy(e.target.value as 'name' | 'group')}
-                 className="bg-transparent text-white text-[11px] font-bold uppercase focus:outline-none cursor-pointer"
-               >
-                 <option value="name">Name</option>
-                 <option value="group">Group</option>
-               </select>
-            </div>
+          <div className="flex items-center gap-2 md:gap-4 shrink-0 w-full xs:w-auto justify-end">
             {!isGuest && (
-              <div className="flex gap-2">
-                <div className="relative group/add">
+              <div className="flex gap-2 w-full xs:w-auto">
+                <div className="relative group/add flex-1 xs:flex-none">
                   <button 
                     onClick={() => handleOpenAdd()}
-                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-3 md:px-4 py-2 rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-[0.1em] transition-all shadow-lg shadow-blue-900/40"
+                    className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-2.5 md:px-4 py-2 md:py-2.5 rounded-lg text-[7px] md:text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-blue-900/40"
                   >
-                    <Plus size={14} /> <span>Assign Duty Period</span>
+                    <Plus size={12} /> <span className="hidden sm:inline">Assign Duty Period</span><span className="sm:hidden">Duty</span>
                   </button>
-                  <div className="absolute top-full right-0 mt-2 px-3 py-1.5 bg-black/90 border border-white/10 rounded-lg text-[8px] text-slate-300 uppercase font-bold tracking-widest invisible group-hover/add:visible z-50 whitespace-nowrap shadow-2xl backdrop-blur-sm">
-                    Assign ON_DUTY, TRANSIT, or OFF_DUTY periods to crew
-                  </div>
                 </div>
 
-                <div className="relative group/event-btn">
+                <div className="relative group/event-btn flex-1 xs:flex-none">
                   <button 
                     onClick={() => handleOpenAddEvent()}
-                    className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-3 md:px-4 py-2 rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-[0.1em] transition-all shadow-lg shadow-emerald-900/40"
+                    className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 md:px-4 py-2 md:py-2.5 rounded-lg text-[7px] md:text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-emerald-900/40"
                   >
-                    <Tag size={12} /> <span>Add Event</span>
+                    <Tag size={10} /> <span className="hidden sm:inline">Add Hub Event</span><span className="sm:hidden">Event</span>
                   </button>
-                  <div className="absolute top-full right-0 mt-2 px-3 py-1.5 bg-black/90 border border-white/10 rounded-lg text-[8px] text-slate-300 uppercase font-bold tracking-widest invisible group-hover/event-btn:visible z-50 whitespace-nowrap shadow-2xl backdrop-blur-sm">
-                    Create hub-wide events, meetings, or holidays
-                  </div>
                 </div>
               </div>
             )}

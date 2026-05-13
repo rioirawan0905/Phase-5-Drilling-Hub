@@ -99,48 +99,48 @@ export function PersonnelList({ isGuest }: PersonnelListProps) {
           <p className="text-[10px] text-slate-500 uppercase tracking-widest mt-0.5">Crew Roster Management</p>
         </div>
         
-        <div className="flex flex-wrap items-center gap-3 md:gap-4 w-full md:w-auto">
-          <div className="flex bg-[#111114] border border-white/10 p-1 md:p-1.5 rounded-xl shadow-inner group flex-1 md:flex-none overflow-x-auto no-scrollbar">
+        <div className="flex flex-wrap items-center gap-2 md:gap-4 w-full md:w-auto">
+          <div className="flex bg-[#111114] border border-white/10 p-1 rounded-lg md:rounded-xl shadow-inner group flex-1 md:flex-none">
             <button 
               onClick={() => setViewType('grid')}
               className={cn(
-                "flex items-center justify-center gap-2 px-3 md:px-5 py-2 md:py-2.5 rounded-lg transition-all text-[9px] md:text-[11px] font-black uppercase tracking-widest whitespace-nowrap flex-1 md:flex-none", 
+                "flex items-center justify-center gap-1.5 md:gap-2 px-2.5 md:px-5 py-1.5 md:py-2.5 rounded-md md:rounded-lg transition-all text-[8px] md:text-[11px] font-black uppercase tracking-widest whitespace-nowrap flex-1 md:flex-none", 
                 viewType === 'grid' 
                   ? "bg-blue-600 text-white shadow-lg shadow-blue-900/40" 
                   : "text-slate-500 hover:text-slate-300 hover:bg-white/5"
               )}
             >
-              <LayoutGrid size={14} className="md:w-[16px] md:h-[16px]" />
+              <LayoutGrid size={12} className="md:w-[16px] md:h-[16px]" />
               <span>Crews</span>
             </button>
             <button 
               onClick={() => setViewType('calendar')}
               className={cn(
-                "flex items-center justify-center gap-2 px-3 md:px-5 py-2 md:py-2.5 rounded-lg transition-all text-[9px] md:text-[11px] font-black uppercase tracking-widest whitespace-nowrap flex-1 md:flex-none", 
+                "flex items-center justify-center gap-1.5 md:gap-2 px-2.5 md:px-5 py-1.5 md:py-2.5 rounded-md md:rounded-lg transition-all text-[8px] md:text-[11px] font-black uppercase tracking-widest whitespace-nowrap flex-1 md:flex-none", 
                 viewType === 'calendar' 
                   ? "bg-blue-600 text-white shadow-lg shadow-blue-900/40" 
                   : "text-slate-500 hover:text-slate-300 hover:bg-white/5"
               )}
             >
-              <CalendarIcon size={14} className="md:w-[16px] md:h-[16px]" />
+              <CalendarIcon size={12} className="md:w-[16px] md:h-[16px]" />
               <span>Sched</span>
             </button>
           </div>
 
-          <div className="relative flex-1 md:flex-none min-w-[150px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
+          <div className="relative flex-1 md:flex-none min-w-[120px] md:min-w-[250px] order-3 md:order-2 w-full md:w-auto">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={12} />
             <input 
               type="text" 
               placeholder="SEARCH..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="bg-[#111114] border border-white/5 pl-9 pr-4 py-2 text-[10px] font-mono text-slate-400 placeholder:text-slate-600 focus:outline-none focus:border-blue-500/50 w-full md:w-64 transition-all rounded-lg"
+              className="bg-[#111114] border border-white/5 pl-9 pr-4 py-2 text-[9px] md:text-[10px] font-mono text-slate-400 placeholder:text-slate-600 focus:outline-none focus:border-blue-500/50 w-full md:w-64 transition-all rounded-lg"
             />
           </div>
           {!isGuest && (
             <button 
               onClick={() => setIsModalOpen(true)}
-              className="btn-primary py-2 px-4 text-[10px] whitespace-nowrap flex-1 md:flex-none justify-center"
+              className="btn-primary py-2 px-3 md:px-4 text-[9px] md:text-[10px] whitespace-nowrap order-2 md:order-3 md:flex-none"
             >
               + Crew
             </button>

@@ -21,7 +21,7 @@ export function Layout({ children, user, isGuest, activeTab, onTabChange, onLogo
   ] as const).filter(Boolean) as { id: 'dashboard' | 'personnel' | 'flights' | 'settings', label: string, icon: any }[];
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden font-sans transition-colors duration-300" style={{ backgroundColor: 'var(--theme-bg)', color: 'var(--theme-text)' }}>
+    <div className="h-screen flex flex-col overflow-hidden font-sans transition-colors duration-300" style={{ height: '100dvh', backgroundColor: 'var(--theme-bg)', color: 'var(--theme-text)' }}>
       {/* Header */}
       <header className="h-16 border-b flex items-center justify-between px-4 md:px-6 shrink-0 z-30 transition-colors duration-300" style={{ borderColor: 'var(--theme-border)', backgroundColor: 'var(--theme-header)' }}>
         <div className="flex items-center gap-2 md:gap-4">
