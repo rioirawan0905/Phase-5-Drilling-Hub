@@ -23,10 +23,26 @@ const eventSchema = z.object({
   startDate: z.string().min(1, 'Start date is required'),
   endDate: z.string().min(1, 'End date is required'),
   type: z.enum(['general', 'meeting', 'walkthrough', 'holiday'] as const),
+  recurrence: z.enum(['none', 'daily', 'weekly', 'biweekly', 'monthly']),
+  recurrenceDays: z.array(z.number()).optional(), // 0-6 for Sun-Sat
 });
 
 type ScheduleFormData = z.infer<typeof scheduleSchema>;
 type EventFormData = z.infer<typeof eventSchema>;
+
+function toLocalDateStr(date: Date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+const eventTypeColors: Record<string, { bg: string, text: string, border: string, solid: string }> = {
+  general: { bg: 'bg-blue-500/10', text: 'text-blue-400', border: 'border-blue-500/30', solid: 'bg-blue-600' },
+  meeting: { bg: 'bg-amber-500/10', text: 'text-amber-400', border: 'border-amber-500/30', solid: 'bg-amber-600' },
+  walkthrough: { bg: 'bg-purple-500/10', text: 'text-purple-400', border: 'border-purple-500/30', solid: 'bg-purple-600' },
+  holiday: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', border: 'border-emerald-500/30', solid: 'bg-emerald-600' },
+};
 
 type ViewMode = 'month' | 'week' | 'personnel' | 'gantt';
 
@@ -100,12 +116,14 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
 
   const { register: registerEvent, handleSubmit: handleSubmitEvent, reset: resetEvent, setValue: setEventValue, watch: watchEvent, formState: { errors: eventErrors } } = useForm<EventFormData>({
     resolver: zodResolver(eventSchema),
-    defaultValues: { type: 'general' }
+    defaultValues: { type: 'general', recurrence: 'none', recurrenceDays: [] }
   });
 
   const watchPersonnelIds = watch('personnelIds');
   const watchStatus = watch('status');
   const watchEventType = watchEvent('type');
+  const watchRecurrence = watchEvent('recurrence');
+  const watchRecurrenceDays = watchEvent('recurrenceDays');
 
   useEffect(() => {
     const unsubP = onSnapshot(collection(db, 'personnel'), (snap) => {
@@ -125,13 +143,60 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
       if (editingEvent) {
         await updateDoc(doc(db, 'events', editingEvent.id), data);
       } else {
-        await addDoc(collection(db, 'events'), { ...data, createdAt: new Date() });
+        if (data.recurrence === 'none') {
+          await addDoc(collection(db, 'events'), { ...data, createdAt: new Date() });
+        } else {
+          // Generate recurring events
+          const eventsToCreate = [];
+          const seriesStart = new Date(data.startDate);
+          const seriesEnd = new Date(data.endDate);
+          
+          let current = new Date(seriesStart);
+          // If monthly, keep the original day
+          const originalDay = seriesStart.getDate();
+
+          while (current <= seriesEnd) {
+            // Check if this specific day is allowed if recurrenceDays is set
+            const dayOfWeek = current.getDay();
+            const isAllowedDay = !data.recurrenceDays || data.recurrenceDays.length === 0 || data.recurrenceDays.includes(dayOfWeek);
+
+            if (isAllowedDay) {
+              eventsToCreate.push({
+                ...data,
+                startDate: toLocalDateStr(current),
+                endDate: toLocalDateStr(current), // Assume 1-day events for recurrence
+                createdAt: new Date()
+              });
+            }
+
+            if (data.recurrence === 'daily') {
+              current.setDate(current.getDate() + 1);
+            } else if (data.recurrence === 'weekly') {
+              current.setDate(current.getDate() + 7);
+            } else if (data.recurrence === 'biweekly') {
+              current.setDate(current.getDate() + 14);
+            } else if (data.recurrence === 'monthly') {
+               current.setMonth(current.getMonth() + 1);
+               current.setDate(originalDay);
+            } else {
+              break;
+            }
+          }
+
+          if (eventsToCreate.length === 0) {
+             throw new Error('No events generated for the selected recurrence and days');
+          }
+
+          const batch = eventsToCreate.map(ev => addDoc(collection(db, 'events'), ev));
+          await Promise.all(batch);
+        }
       }
       setIsEventModalOpen(false);
       setEditingEvent(null);
-      resetEvent({ type: 'general', title: '', description: '', startDate: '', endDate: '' });
+      resetEvent({ type: 'general', title: '', description: '', startDate: '', endDate: '', recurrence: 'none', recurrenceDays: [] });
     } catch (error) {
-      handleFirestoreError(error, editingEvent ? OperationType.UPDATE : OperationType.CREATE, 'events');
+       console.error("Save Event Error:", error);
+       handleFirestoreError(error, editingEvent ? OperationType.UPDATE : OperationType.CREATE, 'events');
     }
   };
 
@@ -143,8 +208,10 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
       title: '',
       description: '',
       location: 'MLN',
-      startDate: dateStr || new Date().toISOString().split('T')[0], 
-      endDate: dateStr || new Date().toISOString().split('T')[0]
+      startDate: dateStr || toLocalDateStr(new Date()), 
+      endDate: dateStr || toLocalDateStr(new Date()),
+      recurrence: 'none',
+      recurrenceDays: []
     });
     setIsEventModalOpen(true);
   };
@@ -155,19 +222,29 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
     resetEvent({
       title: ev.title,
       description: ev.description || '',
-      location: ev.location || 'MLN',
+      location: (ev as any).location || 'MLN',
       startDate: ev.startDate,
       endDate: ev.endDate,
-      type: ev.type
+      type: ev.type,
+      recurrence: (ev as any).recurrence || 'none',
+      recurrenceDays: (ev as any).recurrenceDays || []
     });
     setIsEventModalOpen(true);
   };
 
-  const handleDeleteEvent = async (id: string, e: MouseEvent) => {
-    e.stopPropagation();
+  const handleDeleteEvent = async (id: string, e?: MouseEvent) => {
+    if (e) e.stopPropagation();
     if (isGuest) return;
-    if (confirm('Delete this event?')) {
-      await deleteDoc(doc(db, 'events', id));
+    try {
+      if (confirm('Are you sure you want to delete this event? This action cannot be undone.')) {
+        console.log("Deleting event:", id);
+        await deleteDoc(doc(db, 'events', id));
+        setIsEventModalOpen(false);
+        setEditingEvent(null);
+      }
+    } catch (error) {
+      console.error("Delete Event Error:", error);
+      handleFirestoreError(error, OperationType.DELETE, 'events');
     }
   };
 
@@ -217,8 +294,8 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
     setEditingSchedule(null);
     reset({ 
       status: 'ON_DUTY', 
-      startDate: dateStr || new Date().toISOString().split('T')[0], 
-      endDate: dateStr || new Date().toISOString().split('T')[0],
+      startDate: dateStr || toLocalDateStr(new Date()), 
+      endDate: dateStr || toLocalDateStr(new Date()),
       personnelIds: pId ? [pId] : []
     });
     setIsModalOpen(true);
@@ -279,7 +356,7 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
     }
 
     for (let day = 1; day <= totalDays; day++) {
-      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const dateStr = toLocalDateStr(new Date(year, month, day));
       const activeSchedules = filteredSchedules.filter(s => {
         const start = s.startDate;
         const end = s.endDate;
@@ -305,25 +382,30 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
              )}
           </div>
           <div className="flex-1 space-y-1 overflow-y-auto custom-scrollbar">
-            {activeEvents.map(ev => (
-              <div 
-                key={ev.id}
-                onClick={(e) => { e.stopPropagation(); handleEditEvent(ev); }}
-                className={cn(
-                  "text-[8px] px-1.5 py-0.5 rounded flex items-center gap-1 font-bold text-white bg-white/5 border border-white/5 relative group/event",
-                  isGuest ? "cursor-default" : "cursor-pointer hover:border-white/20"
-                )}
-                title={`${ev.title}${ev.description ? `: ${ev.description}` : ''}`}
-              >
-                {getEventIcon(ev.type, 8)}
-                <span className="truncate">{ev.title}</span>
-                {/* Tooltip on hover */}
-                <div className="absolute bottom-full left-0 mb-2 w-32 bg-black p-2 rounded border border-white/10 text-[7px] invisible group-hover/event:visible z-50">
-                  <p className="font-bold border-b border-white/10 pb-1 mb-1">{ev.title}</p>
-                  <p className="opacity-70 leading-tight">{ev.description || 'No description'}</p>
+            {activeEvents.map(ev => {
+              const colors = eventTypeColors[ev.type] || eventTypeColors.general;
+              return (
+                <div 
+                  key={ev.id}
+                  onClick={(e) => { e.stopPropagation(); handleEditEvent(ev); }}
+                  className={cn(
+                    "text-[8px] px-1.5 py-0.5 rounded flex items-center gap-1 font-bold border transition-all",
+                    colors.bg, colors.text, colors.border,
+                    isGuest ? "cursor-default" : "cursor-pointer hover:border-white/20"
+                  )}
+                  title={`${ev.title}${ev.description ? `: ${ev.description}` : ''}`}
+                >
+                  {getEventIcon(ev.type, 8)}
+                  <span className="truncate">{ev.title}</span>
+                  {/* Tooltip on hover */}
+                  <div className="absolute bottom-full left-0 mb-2 w-32 bg-slate-900 p-2 rounded-xl border border-white/10 text-[7px] invisible group-hover/event:visible z-50 shadow-2xl">
+                    <div className={cn("w-full h-0.5 absolute top-0 left-0 rounded-t-xl", colors.solid)} />
+                    <p className="font-bold border-b border-white/10 pb-1 mb-1 text-white">{ev.title}</p>
+                    <p className="opacity-70 leading-tight text-slate-300">{ev.description || 'No description'}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
             {activeSchedules.map(s => {
               const person = personnel.find(p => p.id === s.personnelId);
               return (
@@ -368,7 +450,7 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
     const weekDays = Array.from({ length: 7 }).map((_, i) => {
       const d = new Date(startOfWeek);
       d.setDate(startOfWeek.getDate() + i);
-      const dateStr = d.toISOString().split('T')[0];
+      const dateStr = toLocalDateStr(d);
       return { date: d, dateStr };
     });
 
@@ -394,29 +476,37 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
               )}
             </div>
             <div className="flex-1 p-2 space-y-2 overflow-y-auto custom-scrollbar">
-              {events.filter(e => dateStr >= e.startDate && dateStr <= e.endDate).map(ev => (
-                <div 
-                  key={ev.id}
-                  onClick={(e) => { e.stopPropagation(); handleEditEvent(ev); }}
-                  className="p-1.5 rounded-lg bg-white/[0.02] border border-white/5 flex items-center gap-2 group/event relative cursor-pointer hover:border-white/20"
-                >
-                  {getEventIcon(ev.type, 10)}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[8px] font-bold text-slate-200 truncate">{ev.title}</p>
+              {events.filter(e => dateStr >= e.startDate && dateStr <= e.endDate).map(ev => {
+                const colors = eventTypeColors[ev.type] || eventTypeColors.general;
+                return (
+                  <div 
+                    key={ev.id}
+                    onClick={(e) => { e.stopPropagation(); handleEditEvent(ev); }}
+                    className={cn(
+                      "p-1.5 rounded-lg border flex items-center gap-2 group/event relative cursor-pointer transition-all",
+                      colors.bg, colors.border,
+                      isGuest ? "cursor-default" : "hover:border-white/20"
+                    )}
+                  >
+                    {getEventIcon(ev.type, 10)}
+                    <div className="flex-1 min-w-0">
+                      <p className={cn("text-[8px] font-bold truncate", colors.text)}>{ev.title}</p>
+                    </div>
+                    {/* Tooltip on hover */}
+                    <div className="absolute bottom-full left-0 mb-2 w-40 bg-slate-900 p-2 rounded-xl border border-white/10 text-[8px] invisible group-hover/event:visible z-50 shadow-2xl">
+                      <div className={cn("w-full h-0.5 absolute top-0 left-0 rounded-t-xl", colors.solid)} />
+                      <p className="font-bold border-b border-white/10 pb-1 mb-1 text-white">{ev.title}</p>
+                      <p className="text-slate-400 leading-tight">{ev.description || 'No description provided'}</p>
+                      <p className="text-[7px] text-slate-600 mt-2 font-mono uppercase">{formatDate(ev.startDate)} - {formatDate(ev.endDate)}</p>
+                    </div>
+                    {!isGuest && (
+                      <button onClick={(e) => handleDeleteEvent(ev.id, e)} className="opacity-0 group-hover/event:opacity-100 hover:text-rose-500 text-slate-700 transition-opacity">
+                        <Trash2 size={10} />
+                      </button>
+                    )}
                   </div>
-                  {/* Tooltip on hover */}
-                  <div className="absolute bottom-full left-0 mb-2 w-40 bg-black p-2 rounded border border-white/10 text-[8px] invisible group-hover/event:visible z-50 shadow-2xl">
-                    <p className="font-bold border-b border-white/10 pb-1 mb-1 text-white">{ev.title}</p>
-                    <p className="text-slate-400 leading-tight">{ev.description || 'No description provided'}</p>
-                    <p className="text-[7px] text-slate-600 mt-2 font-mono uppercase">{formatDate(ev.startDate)} - {formatDate(ev.endDate)}</p>
-                  </div>
-                  {!isGuest && (
-                    <button onClick={(e) => handleDeleteEvent(ev.id, e)} className="opacity-0 group-hover/event:opacity-100 hover:text-rose-500 text-slate-700 transition-opacity">
-                      <Trash2 size={10} />
-                    </button>
-                  )}
-                </div>
-              ))}
+                );
+              })}
               {filteredSchedules.filter(s => dateStr >= s.startDate && dateStr <= s.endDate).map(s => {
                 const person = personnel.find(p => p.id === s.personnelId);
                 return (
@@ -457,38 +547,42 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
              </h4>
           </div>
           <div className="flex gap-3 overflow-x-auto pb-2 custom-scrollbar">
-            {events.sort((a,b) => a.startDate.localeCompare(b.startDate)).map(ev => (
-              <div 
-                key={ev.id}
-                onClick={() => handleEditEvent(ev)}
-                className={cn(
-                  "bg-black/60 border border-emerald-500/20 px-4 py-3 rounded-xl shrink-0 min-w-[200px] relative overflow-hidden group/item transition-all",
-                  isGuest ? "cursor-default" : "cursor-pointer hover:border-emerald-500/40"
-                )}
-              >
-                <div className="absolute left-0 top-0 bottom-0 w-1 bg-emerald-500" />
-                <div className="flex justify-between items-start mb-2">
-                  <div className="flex items-center gap-2">
-                    {getEventIcon(ev.type, 10)}
-                    <p className="text-[8px] font-black text-emerald-600 uppercase tracking-widest">{ev.type}</p>
-                  </div>
-                  {!isGuest && (
-                    <button 
-                      onClick={(e) => handleDeleteEvent(ev.id, e)}
-                      className="text-slate-800 hover:text-rose-500 opacity-0 group-hover/item:opacity-100 mt-[-4px]"
-                    >
-                      <Trash2 size={10} />
-                    </button>
+            {events.sort((a,b) => a.startDate.localeCompare(b.startDate)).map(ev => {
+              const colors = eventTypeColors[ev.type] || eventTypeColors.general;
+              return (
+                <div 
+                  key={ev.id}
+                  onClick={() => handleEditEvent(ev)}
+                  className={cn(
+                    "border px-4 py-3 rounded-xl shrink-0 min-w-[200px] relative overflow-hidden group/item transition-all",
+                    colors.bg, colors.border,
+                    isGuest ? "cursor-default" : "cursor-pointer hover:bg-white/5"
                   )}
+                >
+                  <div className={cn("absolute left-0 top-0 bottom-0 w-1", colors.solid)} />
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="flex items-center gap-2">
+                      {getEventIcon(ev.type, 10)}
+                      <p className={cn("text-[8px] font-black uppercase tracking-widest", colors.text)}>{ev.type}</p>
+                    </div>
+                    {!isGuest && (
+                      <button 
+                        onClick={(e) => handleDeleteEvent(ev.id, e)}
+                        className="text-slate-800 hover:text-rose-500 opacity-0 group-hover/item:opacity-100 mt-[-4px]"
+                      >
+                        <Trash2 size={10} />
+                      </button>
+                    )}
+                  </div>
+                  <h5 className="text-[11px] font-bold text-white mb-2 truncate">{ev.title}</h5>
+                  <div className="space-y-1">
+                     <p className="text-[9px] text-slate-400 font-mono flex items-center gap-2 italic">
+                       {formatDate(ev.startDate)} - {formatDate(ev.endDate)}
+                     </p>
+                  </div>
                 </div>
-                <h5 className="text-[11px] font-bold text-white mb-2 truncate">{ev.title}</h5>
-                <div className="space-y-1">
-                   <p className="text-[9px] text-slate-400 font-mono flex items-center gap-2 italic">
-                     {formatDate(ev.startDate)} - {formatDate(ev.endDate)}
-                   </p>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -579,20 +673,20 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
       new Date(year, month + 1, 1)
     ];
 
-    const dayWidth = 24; 
+    const dayWidth = 32; 
     const timelineDates: { date: Date, dateStr: string }[] = [];
     
     monthsToShow.forEach(m => {
        const days = daysInMonth(m.getFullYear(), m.getMonth());
        for(let i=1; i<=days; i++) {
          const d = new Date(m.getFullYear(), m.getMonth(), i);
-         timelineDates.push({ date: d, dateStr: d.toISOString().split('T')[0] });
+         timelineDates.push({ date: d, dateStr: toLocalDateStr(d) });
        }
     });
 
     return (
       <div className="overflow-x-auto custom-scrollbar border rounded-xl" style={{ backgroundColor: 'var(--theme-container)', borderColor: 'var(--theme-border)' }}>
-        <div style={{ width: timelineDates.length * dayWidth + 200 }}>
+        <div style={{ width: timelineDates.length * dayWidth + 192 }}>
           {/* Header */}
           <div className="flex border-b border-white/5 bg-black/60 sticky top-0 z-20">
             <div className="w-48 shrink-0 border-r border-white/5 p-3 text-[10px] font-black text-slate-400 bg-black/20 uppercase tracking-widest">Crew Roster</div>
@@ -622,9 +716,16 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
           </div>
 
           {/* Rows */}
-          <div className="divide-y divide-white/5">
+          <div className="divide-y divide-white/5 relative">
+            {/* Vertical Separators Grid */}
+            <div className="absolute inset-0 pointer-events-none flex" style={{ left: 192 }}>
+              {timelineDates.map((_, i) => (
+                <div key={i} style={{ width: dayWidth }} className="h-full border-r border-white/5 shrink-0" />
+              ))}
+            </div>
+
             {/* Hub Events Row */}
-            <div className="flex group hover:bg-white/[0.01]">
+            <div className="flex group hover:bg-white/[0.01] relative z-20">
               <div className="w-48 shrink-0 border-r border-white/5 p-3 bg-emerald-900/10">
                 <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest flex items-center gap-2">
                   <Tag size={12} /> Hub Events
@@ -633,6 +734,7 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
               </div>
               <div className="flex-1 relative flex h-14 items-center">
                 {events.map(ev => {
+                  const colors = eventTypeColors[ev.type] || eventTypeColors.general;
                   const findIndex = (dateStr: string) => timelineDates.findIndex(td => td.dateStr === dateStr);
                   let startIdx = findIndex(ev.startDate);
                   let endIdx = findIndex(ev.endDate);
@@ -646,13 +748,30 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                       key={ev.id}
                       style={{ left, width }}
                       onClick={(e) => { e.stopPropagation(); handleEditEvent(ev); }}
-                      className="absolute h-8 rounded-lg flex items-center gap-2 px-3 border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 group/ev cursor-pointer hover:bg-emerald-500/20 transition-all z-10"
+                      className={cn(
+                        "absolute h-8 rounded-lg flex items-center gap-2 px-3 border cursor-pointer hover:scale-[1.02] transition-all z-10 group/ev",
+                        colors.border, colors.bg, colors.text
+                      )}
                     >
                       {getEventIcon(ev.type, 10)}
                       <span className="text-[9px] font-black uppercase tracking-widest truncate">{ev.title}</span>
-                      <div className="absolute bottom-full left-0 mb-2 w-48 bg-black p-2 rounded border border-white/10 text-[9px] invisible group-hover/ev:visible z-50">
-                         <p className="font-bold border-b border-white/10 pb-1 mb-1 text-white">{ev.title}</p>
-                         <p className="text-slate-400 leading-tight">{ev.description || 'No description'}</p>
+                      
+                      {/* Enhanced Tooltip for Hub Events - SHOWN BELOW */}
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-56 bg-slate-900 border border-white/10 p-3 rounded-xl shadow-2xl opacity-0 group-hover/ev:opacity-100 invisible group-hover/ev:visible transition-all z-50 pointer-events-none">
+                         <div className={cn("w-full h-1 absolute top-0 left-0 rounded-t-xl", colors.solid)} />
+                         <div className="flex items-center justify-between mb-1">
+                           <p className="text-[10px] font-black text-white uppercase">{ev.title}</p>
+                           <span className={cn("text-[8px] font-black uppercase tracking-tighter", colors.text)}>{ev.type}</span>
+                         </div>
+                         <p className="text-[9px] text-slate-400 leading-tight mb-2 italic">
+                           {ev.description || 'Global hub-wide event'}
+                         </p>
+                         <div className="flex items-center gap-2 text-[9px] font-mono border-t border-white/5 pt-2">
+                           <CalendarIcon size={10} className={colors.text} />
+                           <span className="text-white">{formatDate(ev.startDate)}</span>
+                           <span className="text-slate-500">-</span>
+                           <span className="text-white">{formatDate(ev.endDate)}</span>
+                         </div>
                       </div>
                     </div>
                   );
@@ -661,7 +780,7 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
             </div>
 
             {sortedPersonnel.map(p => (
-              <div key={p.id} className="flex group hover:bg-white/[0.01]">
+              <div key={p.id} className="flex group hover:bg-white/[0.01] relative z-10">
                 <div className="w-48 shrink-0 border-r border-white/5 p-3 bg-black/10">
                   <p className="text-[10px] font-bold text-[var(--theme-text)] uppercase truncate">{p.fullName}</p>
                   <p className={cn(
@@ -682,19 +801,49 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                     const left = startIdx * dayWidth;
                     const width = (endIdx - startIdx + 1) * dayWidth;
 
+                    const showDates = width > 100;
+
                     return (
                       <div 
                         key={s.id}
                         style={{ left, width }}
                         className={cn(
-                          "absolute h-6 rounded flex items-center justify-center px-1 group/bar overflow-hidden border border-white/10 text-white",
+                          "absolute h-7 rounded flex items-center justify-center px-1 group/bar border border-white/20 text-white transition-all hover:scale-[1.02] hover:z-20",
                           getGroupColor(p.rosterGroup),
                           getStatusColor(s.status)
                         )}
+                        onClick={() => handleEdit(s)}
                       >
-                        <span className="text-[7px] text-white font-black uppercase tracking-[0.1em] transition-opacity whitespace-nowrap">
-                          {s.status === 'TRANSIT' ? 'TRANS' : s.status}
-                        </span>
+                        <div className="flex flex-col items-center leading-none">
+                          <span className={cn("text-white font-black uppercase tracking-[0.1em] whitespace-nowrap", showDates ? "text-[8px]" : "text-[9px]")}>
+                            {s.status === 'TRANSIT' ? 'TRANS' : s.status}
+                          </span>
+                          {showDates && (
+                            <span className="text-[7px] opacity-90 font-mono font-black border-t border-white/20 mt-0.5 pt-0.5 whitespace-nowrap">
+                              {s.startDate.split('-').slice(1).join('/')} - {s.endDate.split('-').slice(1).join('/')}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Enhanced Tooltip */}
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-slate-900 border border-white/10 p-3 rounded-xl shadow-2xl opacity-0 group-hover/bar:opacity-100 invisible group-hover/bar:visible transition-all z-50 pointer-events-none">
+                          <div className={cn("w-full h-1 absolute top-0 left-0 rounded-t-xl", getGroupColor(p.rosterGroup))} />
+                          <p className="text-[10px] font-black text-white mb-1 uppercase">{p.fullName}</p>
+                          <div className="flex items-center gap-2 mb-2">
+                             <span className={cn("text-[7px] px-1.5 py-0.5 rounded font-black text-white", getGroupColor(p.rosterGroup))}>{p.rosterGroup}</span>
+                             <span className="text-[8px] font-bold text-slate-400">{s.status}</span>
+                          </div>
+                          <div className="space-y-1 text-[9px] font-mono">
+                            <div className="flex justify-between">
+                              <span className="text-slate-500 font-bold">START:</span>
+                              <span className="text-white">{formatDate(s.startDate)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-500 font-bold">END:</span>
+                              <span className="text-white">{formatDate(s.endDate)}</span>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     );
                   })}
@@ -861,12 +1010,16 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="text-[10px] text-slate-500 uppercase font-bold px-1">Start Date</label>
+                    <label className="text-[10px] text-slate-500 uppercase font-bold px-1">
+                      {watchRecurrence === 'none' ? 'Start Date' : 'Series Start Date'}
+                    </label>
                     <input type="date" {...registerEvent('startDate')} className="w-full bg-[#0a0a0c] border border-white/5 px-4 py-2.5 text-sm text-slate-300 rounded-lg focus:outline-none focus:border-emerald-500/30" />
                     {eventErrors.startDate && <p className="text-[10px] text-rose-500 px-1">{eventErrors.startDate.message}</p>}
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] text-slate-500 uppercase font-bold px-1">End Date</label>
+                    <label className="text-[10px] text-slate-500 uppercase font-bold px-1">
+                      {watchRecurrence === 'none' ? 'End Date' : 'Series End Date'}
+                    </label>
                     <input type="date" {...registerEvent('endDate')} className="w-full bg-[#0a0a0c] border border-white/5 px-4 py-2.5 text-sm text-slate-300 rounded-lg focus:outline-none focus:border-emerald-500/30" />
                     {eventErrors.endDate && <p className="text-[10px] text-rose-500 px-1">{eventErrors.endDate.message}</p>}
                   </div>
@@ -886,13 +1039,59 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                 </div>
 
                 <div className="space-y-1">
+                  <label className="text-[10px] text-slate-500 uppercase font-bold px-1">Recurrence</label>
+                  <select 
+                    {...registerEvent('recurrence')}
+                    disabled={!!editingEvent}
+                    className="w-full bg-[#0a0a0c] border border-white/5 px-4 py-2.5 text-sm text-slate-300 rounded-lg focus:outline-none focus:border-emerald-500/30 disabled:opacity-50"
+                  >
+                    <option value="none">No Recurrence</option>
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="biweekly">Bi-Weekly</option>
+                    <option value="monthly">Monthly</option>
+                  </select>
+                  {watchRecurrence !== 'none' && !editingEvent && (
+                    <div className="pt-2">
+                       <label className="text-[10px] text-slate-500 uppercase font-bold px-1 mb-2 block">Specific Days (Optional)</label>
+                       <div className="flex flex-wrap gap-1">
+                         {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
+                           <button
+                             key={i}
+                             type="button"
+                             onClick={() => {
+                               const current = watchRecurrenceDays || [];
+                               if (current.includes(i)) {
+                                 setEventValue('recurrenceDays', current.filter(d => d !== i));
+                               } else {
+                                 setEventValue('recurrenceDays', [...current, i]);
+                               }
+                             }}
+                             className={cn(
+                               "w-7 h-7 rounded flex items-center justify-center text-[10px] font-black border transition-all",
+                               watchRecurrenceDays?.includes(i)
+                                 ? "bg-emerald-500 text-white border-emerald-400"
+                                 : "bg-black/40 border-white/5 text-slate-600 hover:border-white/20"
+                             )}
+                           >
+                             {day}
+                           </button>
+                         ))}
+                       </div>
+                       <p className="text-[7px] text-slate-600 px-1 uppercase font-bold mt-2">Only generates on selected days</p>
+                    </div>
+                  )}
+                  {!editingEvent && watchRecurrence !== 'none' && <p className="text-[7px] text-slate-600 px-1 uppercase font-bold mt-1">Generates events for 3 months</p>}
+                </div>
+
+                <div className="space-y-1">
                   <label className="text-[10px] text-slate-500 uppercase font-bold px-1">Event Type</label>
                   <div className="grid grid-cols-2 gap-2">
                     {[
-                      { value: 'general', label: 'General', icon: Info },
-                      { value: 'meeting', label: 'Meeting', icon: Clock },
-                      { value: 'holiday', label: 'Holiday', icon: Palmtree },
-                      { value: 'walkthrough', label: 'Walk Through', icon: Users },
+                      { value: 'general', label: 'General', icon: Info, colors: eventTypeColors.general },
+                      { value: 'meeting', label: 'Meeting', icon: Clock, colors: eventTypeColors.meeting },
+                      { value: 'holiday', label: 'Holiday', icon: Palmtree, colors: eventTypeColors.holiday },
+                      { value: 'walkthrough', label: 'Walk Through', icon: Users, colors: eventTypeColors.walkthrough },
                     ].map(type => (
                       <button
                         key={type.value}
@@ -901,7 +1100,7 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                         className={cn(
                           "py-2.5 rounded-lg text-[9px] font-black uppercase tracking-widest border flex items-center justify-center gap-2 transition-all",
                           watchEventType === type.value 
-                            ? "bg-emerald-500/20 border-emerald-500 text-emerald-400"
+                            ? `${type.colors.bg.replace('/10', '/20')} ${type.colors.border} ${type.colors.text}`
                             : "bg-black/40 border-white/5 text-slate-600 hover:border-white/20"
                         )}
                       >
@@ -912,17 +1111,27 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                   </div>
                 </div>
 
-                <div className="flex gap-3 pt-6 border-t border-white/5 mt-6">
+                <div className="flex gap-2 pt-6 border-t border-white/5 mt-6">
+                  {editingEvent && (
+                    <button 
+                      type="button"
+                      onClick={() => handleDeleteEvent(editingEvent.id)}
+                      className="px-4 py-3 rounded-xl bg-rose-900/20 border border-rose-500/20 text-rose-500 text-xs font-bold uppercase tracking-widest hover:bg-rose-900/40 transition-all flex items-center justify-center"
+                      title="Delete Event"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  )}
                   <button 
                     type="button"
                     onClick={() => setIsEventModalOpen(false)}
-                    className="flex-1 px-4 py-3 rounded-xl bg-black border border-white/5 text-slate-400 text-xs font-bold uppercase tracking-widest hover:text-white transition-all"
+                    className="px-4 py-3 rounded-xl bg-black border border-white/5 text-slate-400 text-xs font-bold uppercase tracking-widest hover:text-white transition-all flex-1"
                   >
                     Cancel
                   </button>
                   <button 
                     type="submit"
-                    className="flex-1 px-4 py-3 rounded-xl bg-emerald-600 text-white text-xs font-bold uppercase tracking-widest hover:bg-emerald-500 transition-all shadow-lg shadow-emerald-900/40"
+                    className="flex-[2] px-4 py-3 rounded-xl bg-emerald-600 text-white text-xs font-bold uppercase tracking-widest hover:bg-emerald-500 transition-all shadow-lg shadow-emerald-900/40"
                   >
                     {editingEvent ? 'Update Event' : 'Save Event'}
                   </button>
@@ -1026,7 +1235,21 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                   <input type="hidden" {...register('status')} />
                 </div>
 
-                <div className="flex gap-3 pt-6 border-t border-white/5 mt-6">
+                <div className="flex gap-2 pt-6 border-t border-white/5 mt-6">
+                  {editingSchedule && (
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        handleDelete(editingSchedule.id);
+                        setIsModalOpen(false);
+                        setEditingSchedule(null);
+                      }}
+                      className="px-4 py-3 rounded-xl bg-rose-900/20 border border-rose-500/20 text-rose-500 text-xs font-bold uppercase tracking-widest hover:bg-rose-900/40 transition-all flex items-center justify-center"
+                      title="Delete Schedule"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  )}
                   <button 
                     type="button"
                     onClick={() => setIsModalOpen(false)}
@@ -1036,7 +1259,7 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                   </button>
                   <button 
                     type="submit"
-                    className="flex-1 px-4 py-3 rounded-xl bg-blue-600 text-white text-xs font-bold uppercase tracking-widest hover:bg-blue-500 transition-all shadow-lg shadow-blue-900/40"
+                    className="flex-[2] px-4 py-3 rounded-xl bg-blue-600 text-white text-xs font-bold uppercase tracking-widest hover:bg-blue-500 transition-all shadow-lg shadow-blue-900/40"
                   >
                     {editingSchedule ? 'Update Duty' : 'Save Duty'}
                   </button>
