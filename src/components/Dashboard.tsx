@@ -581,8 +581,8 @@ export function Dashboard({ isGuest }: DashboardProps) {
 
         <div className="flex items-center gap-8 md:gap-16">
           {[
-            { id: 'JKT', city: 'Jakarta, ID', time: times.jakarta, weather: weather?.jakarta, color: 'emerald' },
-            { id: 'ALG', city: 'Algiers, DZ', time: times.algiers, weather: weather?.algiers, color: 'blue' }
+            { id: 'JKT', city: 'Jakarta, ID', time: times.jakarta, weather: weather?.jakarta, color: 'emerald', timezone: 'Asia/Jakarta' },
+            { id: 'ALG', city: 'Algiers, DZ', time: times.algiers, weather: weather?.algiers, color: 'blue', timezone: 'Africa/Algiers' }
           ].map(location => (
             <div key={location.id} className="flex items-center gap-4 group">
               <div className="flex items-center gap-3">
@@ -592,9 +592,12 @@ export function Dashboard({ isGuest }: DashboardProps) {
                   {location.id}
                 </div>
                 <div>
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-mono font-black text-white tracking-wider leading-none">{location.time}</p>
-                    <span className="text-[8px] text-slate-600 font-black uppercase tracking-tighter">{location.city}</span>
+                  <div className="flex flex-col">
+                    <p className="text-sm font-mono font-black text-white tracking-wider leading-none mb-1">{location.time}</p>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-slate-300 font-black uppercase tracking-widest">{new Date().toLocaleDateString('en-GB', { timeZone: location.timezone, day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                      <span className="text-[9px] text-slate-600 font-black uppercase tracking-tighter opacity-60">— {location.city.split(',')[0]}</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1129,7 +1132,7 @@ export function Dashboard({ isGuest }: DashboardProps) {
                 <div className="pt-1.5 border-t border-white/5">
                   <p className="text-[7px] font-black text-emerald-500 uppercase tracking-[0.2em] leading-none mb-1">Year to Date (YTD)</p>
                   <p className="text-sm font-mono font-black text-emerald-400">{laborAnalytics.ytdHours.toLocaleString()}<span className="text-[8px] text-emerald-500 ml-1">HRS</span></p>
-                  <p className="text-[7px] text-slate-500 font-bold uppercase tracking-widest mt-1 opacity-60">Jan 1 — May 14, 2026</p>
+                  <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-1.5 opacity-80">Jan 1 — May 14, 2026</p>
                 </div>
               </div>
             </div>

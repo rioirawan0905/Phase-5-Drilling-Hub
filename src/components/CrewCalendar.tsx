@@ -65,6 +65,12 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
   const [filterPersonnel, setFilterPersonnel] = useState<string>('ALL');
   const [hoveredDay, setHoveredDay] = useState<string | null>(null);
   const [selectedDayDetails, setSelectedDayDetails] = useState<string | null>(null);
+  const [hoveredWeekItem, setHoveredWeekItem] = useState<{
+    id: string;
+    rect: { top: number, left: number, width: number };
+    schedule: Scheduling;
+    personnel?: Personnel;
+  } | null>(null);
 
   const todayStr = toLocalDateStr(new Date());
 
@@ -512,7 +518,51 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
     });
 
     return (
-      <div className="overflow-x-auto md:overflow-x-visible custom-scrollbar">
+      <div className="overflow-x-auto md:overflow-x-visible custom-scrollbar relative">
+        {/* Fixed Position Tooltip for Week View */}
+        <AnimatePresence>
+          {hoveredWeekItem && (
+            <motion.div
+              initial={{ opacity: 0, y: 5, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 5, scale: 0.95 }}
+              className="fixed z-[9999] w-64 bg-slate-900 border border-white/10 p-3 rounded-xl shadow-2xl pointer-events-none"
+              style={{
+                top: hoveredWeekItem.rect.top - 10,
+                left: hoveredWeekItem.rect.left + hoveredWeekItem.rect.width / 2,
+                transform: 'translate(-50%, -100%)'
+              }}
+            >
+              <div className={cn("w-full h-1 absolute top-0 left-0 rounded-t-xl", getGroupColor(hoveredWeekItem.personnel?.rosterGroup || ''))} />
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-[10px] font-black text-white uppercase">{hoveredWeekItem.personnel?.fullName || 'Crew Member'}</p>
+                <span className={cn(
+                  "text-[8px] px-1.5 py-0.5 rounded font-black text-white",
+                  hoveredWeekItem.schedule.status === 'TRANSIT' ? "bg-blue-600" : "bg-emerald-600"
+                )}>
+                  {hoveredWeekItem.schedule.status}
+                </span>
+              </div>
+              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tight mb-2 italic">
+                {hoveredWeekItem.personnel?.title || 'No title set'} • {hoveredWeekItem.personnel?.rosterGroup}
+              </p>
+              <div className="space-y-1 text-[8px] font-mono border-t border-white/5 pt-2">
+                <div className="flex justify-between">
+                  <span className="text-slate-500 font-bold">START:</span>
+                  <span className="text-white">{formatDate(hoveredWeekItem.schedule.startDate)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500 font-bold">END:</span>
+                  <span className="text-white">{formatDate(hoveredWeekItem.schedule.endDate)}</span>
+                </div>
+              </div>
+              {!isGuest && (
+                <p className="text-[7px] text-blue-400 mt-2 font-black uppercase text-center border-t border-white/5 pt-1.5 border-dashed">Click to edit details</p>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <div className="grid grid-cols-7 border-t border-l border-white/5 h-[450px] md:h-[600px] min-w-[320px] md:min-w-0">
         {weekDays.map(({ date, dateStr, isToday }) => (
           <div 
@@ -572,8 +622,18 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                   <div 
                     key={s.id} 
                     onClick={(e) => { e.stopPropagation(); handleEdit(s); }}
+                    onMouseEnter={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      setHoveredWeekItem({
+                        id: s.id,
+                        rect: { top: rect.top, left: rect.left, width: rect.width },
+                        schedule: s,
+                        personnel: person
+                      });
+                    }}
+                    onMouseLeave={() => setHoveredWeekItem(null)}
                     className={cn(
-                      "p-2 rounded-lg text-[9px] font-black uppercase tracking-widest text-white shadow-md border border-white/10 transition-all",
+                      "p-2 rounded-lg text-[9px] font-black uppercase tracking-widest text-white shadow-md border border-white/10 transition-all relative group",
                       getGroupColor(person?.rosterGroup || ''),
                       getStatusColor(s.status),
                       isGuest ? "cursor-default" : "cursor-pointer hover:border-white/30"
