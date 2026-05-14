@@ -2,10 +2,17 @@ import { useEffect, useRef } from 'react';
 
 export function WeatherWidget() {
   const iframeContent = `
+    <!DOCTYPE html>
     <html>
-      <body style="margin: 0; padding: 0; background: transparent; overflow: hidden; display: flex; justify-content: center;">
-        <a href="https://metar-taf.com/metar/DAUH" id="metartaf-EAEi70uD" style="font-size:18px; font-weight:500; color:#000; width:300px; height:435px; display:block; text-decoration: none; font-family: sans-serif;">METAR Hassi Messaoud Airport</a>
-        <script async defer crossorigin="anonymous" src="https://metar-taf.com/embed-js/DAUH?qnh=hPa&rh=rh&target=EAEi70uD"></script>
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      </head>
+      <body style="margin: 0; padding: 0; background: #ffffff; overflow: hidden; display: flex; justify-content: center;">
+        <div style="width: 300px; padding-top: 20px;">
+          <a href="https://metar-taf.com/metar/DAUH" id="metartaf-EAEi70uD" style="font-size:18px; font-weight:500; color:#000; width:300px; height:435px; display:block; text-decoration: none; font-family: sans-serif; text-align: center;">Loading METAR Data...</a>
+          <script async defer crossorigin="anonymous" src="https://metar-taf.com/embed-js/DAUH?qnh=hPa&rh=rh&target=EAEi70uD"></script>
+        </div>
       </body>
     </html>
   `;
