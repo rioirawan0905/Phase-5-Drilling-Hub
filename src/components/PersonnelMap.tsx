@@ -54,9 +54,9 @@ export function PersonnelMap({ onDutyPersonnel }: PersonnelMapProps) {
   });
 
   return (
-    <div className="flex flex-col md:flex-row h-[500px] md:h-[600px] bg-slate-950 rounded-2xl overflow-hidden border border-white/5">
+    <div className="flex flex-col md:flex-row h-[600px] bg-slate-950 rounded-2xl overflow-hidden border border-white/5">
       {/* Sidebar - Personnel List */}
-      <div className="w-full md:w-80 flex flex-col border-r border-white/5 bg-black/20">
+      <div className="w-full md:w-80 flex flex-col h-48 md:h-auto border-r border-white/5 bg-black/20 shrink-0">
         <div className="p-4 border-b border-white/5">
           <h3 className="text-xs font-black text-emerald-500 uppercase tracking-widest flex items-center gap-2">
             <Navigation size={14} /> Tracking On Duty

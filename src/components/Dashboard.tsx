@@ -1527,7 +1527,7 @@ export function Dashboard({ isGuest }: DashboardProps) {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <ArrowLeft size={10} className="text-emerald-500" />
-                          <span className="text-[10px] text-slate-400 font-mono">IDL-ALG ( {formatDate(flight.requestedDateIDtoDZ)} )</span>
+                          <span className="text-[10px] text-slate-400 font-mono">ID-ALG ( {formatDate(flight.requestedDateIDtoDZ)} )</span>
                         </div>
                         <span className={cn(
                           "text-[8px] font-black uppercase px-2 py-0.5 rounded border",
@@ -1543,7 +1543,7 @@ export function Dashboard({ isGuest }: DashboardProps) {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <ArrowRight size={10} className="text-blue-500" />
-                          <span className="text-[10px] text-slate-400 font-mono">ALG-IDL ( {formatDate(flight.requestedDateDZtoID)} )</span>
+                          <span className="text-[10px] text-slate-400 font-mono">ALG-ID ( {formatDate(flight.requestedDateDZtoID)} )</span>
                         </div>
                         <span className={cn(
                           "text-[8px] font-black uppercase px-2 py-0.5 rounded border",

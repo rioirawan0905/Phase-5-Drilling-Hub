@@ -515,7 +515,7 @@ export function FlightsList({ isGuest }: FlightsListProps) {
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <ArrowLeft size={10} className="text-emerald-400" />
-                            <span className="text-[9px] font-black text-emerald-400 uppercase">IDL → ALG</span>
+                            <span className="text-[9px] font-black text-emerald-400 uppercase">ID → ALG</span>
                           </div>
                           <span className={cn(
                             "px-2 py-0.5 rounded text-[8px] font-black uppercase border",
@@ -548,7 +548,7 @@ export function FlightsList({ isGuest }: FlightsListProps) {
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <ArrowRight size={10} className="text-blue-400" />
-                            <span className="text-[9px] font-black text-blue-400 uppercase">ALG → IDL</span>
+                            <span className="text-[9px] font-black text-blue-400 uppercase">ALG → ID</span>
                           </div>
                           <span className={cn(
                             "px-2 py-0.5 rounded text-[8px] font-black uppercase border",
