@@ -10,6 +10,7 @@ import * as XLSX from 'xlsx';
 import { toBlob } from 'html-to-image';
 
 import { PersonnelMap } from './PersonnelMap';
+import { WeatherWidget } from './WeatherWidget';
 
 interface DashboardProps {
   isGuest?: boolean;
@@ -318,6 +319,42 @@ export function Dashboard({ isGuest }: DashboardProps) {
       return isOnDuty && filteredPersonnelIds.has(s.personnelId);
     });
 
+    // Calculate MTD (Month to Date) Hours - Independent of period selection
+    const now = new Date();
+    const mtdStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    mtdStart.setHours(0,0,0,0);
+    const mtdEnd = new Date(now);
+    mtdEnd.setHours(0,0,0,0);
+    
+    // Calculate YTD (Year to Date) Hours - Independent of period selection (Jan 1st to now)
+    const ytdStart = new Date(now.getFullYear(), 0, 1);
+    ytdStart.setHours(0,0,0,0);
+
+    let mtdHoursCount = 0;
+    let ytdHoursCount = 0;
+
+    targetSchedules.forEach(s => {
+      const sStart = toDate(s.startDate);
+      const sEnd = toDate(s.endDate);
+      if (!sStart || !sEnd) return;
+      
+      // MTD Intersection
+      const mtdIS = sStart > mtdStart ? sStart : mtdStart;
+      const mtdIE = sEnd < mtdEnd ? sEnd : mtdEnd;
+      if (mtdIS <= mtdIE) {
+        const diffDays = Math.floor((mtdIE.getTime() - mtdIS.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        mtdHoursCount += diffDays * 12;
+      }
+
+      // YTD Intersection
+      const ytdIS = sStart > ytdStart ? sStart : ytdStart;
+      const ytdIE = sEnd < mtdEnd ? sEnd : mtdEnd; // Current date is the end for YTD check
+      if (ytdIS <= ytdIE) {
+        const diffDays = Math.floor((ytdIE.getTime() - ytdIS.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        ytdHoursCount += diffDays * 12;
+      }
+    });
+
     // 3. Filter by period if any selected
     if (selectedPeriods.length > 0) {
       targetSchedules = targetSchedules.filter(s => {
@@ -363,7 +400,7 @@ export function Dashboard({ isGuest }: DashboardProps) {
       .filter(item => item.hours > 0)
       .sort((a, b) => b.hours - a.hours);
 
-    return { totalHours: totalHoursCount, chartData };
+    return { totalHours: totalHoursCount, chartData, mtdHours: mtdHoursCount, ytdHours: ytdHoursCount };
   }, [schedules, personnel, selectedPersonnel, selectedGroup, selectedPeriods]);
 
   const filteredSummaryFlights = useMemo(() => {
@@ -584,14 +621,15 @@ export function Dashboard({ isGuest }: DashboardProps) {
       {/* Metrics Row */}
       <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         {[
-          { label: 'Personnel', val: stats.totalPersonnel, sub: `+${stats.onDutyCount} On-Site`, color: 'text-white' },
-          { label: 'Total Hours', val: laborAnalytics.totalHours.toLocaleString(), sub: 'Est. Cumulative', color: 'text-blue-400' },
-          { label: 'Fulfillment', val: stats.completedFlights, sub: 'Received Tickets', color: 'text-emerald-500' },
+          { label: 'Personnel', val: stats.totalPersonnel, sub: `+${stats.onDutyCount} On-Site`, color: 'text-white', icon: <Users size={16} className="text-slate-400" /> },
+          { label: 'Total Hours', val: laborAnalytics.totalHours.toLocaleString(), sub: `YTD: ${laborAnalytics.ytdHours.toLocaleString()} hrs`, color: 'text-blue-400', icon: <Clock size={16} className="text-blue-500" /> },
+          { label: 'Fulfillment', val: stats.completedFlights, sub: 'Received Tickets', color: 'text-emerald-500', icon: <CheckCircle2 size={16} className="text-emerald-500" /> },
           { 
             label: 'On Duty', 
             val: `${stats.onDutyPercent}%`, 
             sub: 'Duty Utilization', 
             color: 'text-orange-400',
+            icon: <Activity size={16} className="text-orange-500" />,
             extra: (
               <div className="group relative inline-block ml-1">
                 <Info size={12} className="text-slate-600 cursor-help" />
@@ -604,10 +642,13 @@ export function Dashboard({ isGuest }: DashboardProps) {
         ].map((item, i) => (
           <motion.div 
             initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }}
-            key={item.label} className="theme-card p-4 md:p-7"
+            key={item.label} className="theme-card p-4 md:p-7 group hover:border-white/10 transition-all"
           >
             <div className="flex items-center justify-between mb-2">
-              <p className="text-[10px] md:text-[11px] text-slate-500 uppercase tracking-widest truncate font-bold">{item.label}</p>
+              <div className="flex items-center gap-2">
+                {item.icon}
+                <p className="text-[10px] md:text-[11px] text-slate-500 uppercase tracking-widest truncate font-bold">{item.label}</p>
+              </div>
               {item.extra}
             </div>
             <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 md:gap-3">
@@ -642,21 +683,28 @@ export function Dashboard({ isGuest }: DashboardProps) {
           </div>
         </div>
         
-        <PersonnelMap 
-          onDutyPersonnel={personnel.filter(p => {
-             const now = new Date();
-             now.setHours(0,0,0,0);
-             return schedules.some(s => {
-               const start = toDate(s.startDate);
-               const end = toDate(s.endDate);
-               if (!start || !end) return false;
-               return s.personnelId === p.id && 
-                      s.status === 'ON_DUTY' && 
-                      now >= start && 
-                      now <= end;
-             });
-          })} 
-        />
+        <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 items-start">
+          <div className="xl:col-span-3">
+            <PersonnelMap 
+              onDutyPersonnel={personnel.filter(p => {
+                 const now = new Date();
+                 now.setHours(0,0,0,0);
+                 return schedules.some(s => {
+                   const start = toDate(s.startDate);
+                   const end = toDate(s.endDate);
+                   if (!start || !end) return false;
+                   return s.personnelId === p.id && 
+                          s.status === 'ON_DUTY' && 
+                          now >= start && 
+                          now <= end;
+                 });
+              })} 
+            />
+          </div>
+          <div className="xl:col-span-1">
+            <WeatherWidget />
+          </div>
+        </div>
       </motion.div>
 
       {/* Main Grid Layout */}
@@ -1071,18 +1119,25 @@ export function Dashboard({ isGuest }: DashboardProps) {
               )}
             </div>
             
-            {/* Legend / Stats overlay */}
-            <div className="absolute bottom-6 right-6 flex flex-col gap-2 pointer-events-none">
-              <div className="bg-black/80 backdrop-blur-md border border-white/5 p-3 rounded-lg text-right">
-                <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest leading-none mb-1">Total Working Hours</p>
-                <p className="text-xl font-mono font-black text-white">{laborAnalytics.totalHours.toLocaleString()}<span className="text-[10px] text-blue-500 ml-1">HRS</span></p>
+            {/* Legend / Stats overlay - Repositioned to top-right to avoid overlap */}
+            <div className="absolute top-[88px] right-6 flex flex-col gap-2 pointer-events-none z-20">
+              <div className="bg-black/90 backdrop-blur-xl border border-white/10 p-3 rounded-xl text-right flex flex-col gap-1.5 shadow-2xl">
+                <div>
+                  <p className="text-[7px] font-black text-slate-500 uppercase tracking-[0.2em] leading-none mb-1">Total Period Hours</p>
+                  <p className="text-xl font-mono font-black text-white">{laborAnalytics.totalHours.toLocaleString()}<span className="text-[10px] text-blue-500 ml-1">HRS</span></p>
+                </div>
+                <div className="pt-1.5 border-t border-white/5">
+                  <p className="text-[7px] font-black text-emerald-500 uppercase tracking-[0.2em] leading-none mb-1">Year to Date (YTD)</p>
+                  <p className="text-sm font-mono font-black text-emerald-400">{laborAnalytics.ytdHours.toLocaleString()}<span className="text-[8px] text-emerald-500 ml-1">HRS</span></p>
+                  <p className="text-[7px] text-slate-500 font-bold uppercase tracking-widest mt-1 opacity-60">Jan 1 — May 14, 2026</p>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
         {/* Personnel Status Manifest */}
-        <div className="theme-card p-5 flex flex-col max-h-[400px]">
+        <div className="theme-card p-5 flex flex-col h-[578px]">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="text-sm font-bold text-white uppercase tracking-widest">Live Manifest</h3>
