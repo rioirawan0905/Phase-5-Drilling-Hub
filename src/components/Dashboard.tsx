@@ -683,7 +683,7 @@ export function Dashboard({ isGuest }: DashboardProps) {
           </div>
         </div>
         
-        <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 items-start">
+        <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 items-stretch">
           <div className="xl:col-span-3">
             <PersonnelMap 
               onDutyPersonnel={personnel.filter(p => {

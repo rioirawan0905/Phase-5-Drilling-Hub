@@ -33,19 +33,19 @@ export function WeatherWidget() {
   }, []);
 
   return (
-    <div className="theme-container p-4 bg-blue-950/20 border-blue-500/20 flex flex-col items-center">
+    <div className="theme-container h-full p-4 bg-white border-white flex flex-col items-center shadow-xl">
       <div className="w-full flex items-center justify-between mb-4">
-        <h3 className="text-[10px] font-black text-white uppercase tracking-[0.2em]">METAR Live Feed</h3>
-        <span className="text-[8px] text-blue-500 font-bold uppercase tracking-tight">DAUH / HASSI MESSAOUD</span>
+        <h3 className="text-[10px] font-black text-slate-900 uppercase tracking-[0.2em]">METAR Live Feed</h3>
+        <span className="text-[8px] text-blue-600 font-bold uppercase tracking-tight">DAUH / HASSI MESSAOUD</span>
       </div>
-      <div ref={containerRef} className="w-full overflow-hidden flex justify-center bg-black/40 rounded-xl p-2 border border-white/5 min-h-[445px]">
+      <div ref={containerRef} className="w-full overflow-hidden flex justify-center bg-slate-50 rounded-xl p-2 border border-slate-200 flex-1 min-h-[445px]">
         <a 
           href="https://metar-taf.com/metar/DAUH" 
           id="metartaf-EAEi70uD" 
           style={{
             fontSize: '18px', 
             fontWeight: '500', 
-            color: '#fff', 
+            color: '#000', 
             width: '300px', 
             height: '435px', 
             display: 'block',
@@ -58,8 +58,8 @@ export function WeatherWidget() {
         </a>
       </div>
       <div className="mt-4 flex items-center gap-2">
-        <div className="w-1 h-1 rounded-full bg-blue-500 animate-pulse" />
-        <p className="text-[8px] text-slate-500 font-black uppercase tracking-[0.1em]">Aviation Weather Intel</p>
+        <div className="w-1 h-1 rounded-full bg-blue-600 animate-pulse" />
+        <p className="text-[8px] text-slate-400 font-black uppercase tracking-[0.1em]">Aviation Weather Intel</p>
       </div>
     </div>
   );
