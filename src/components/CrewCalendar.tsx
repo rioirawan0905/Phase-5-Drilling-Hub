@@ -63,6 +63,8 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
   const [sortBy, setSortBy] = useState<'name' | 'group'>('name');
   const [filterGroup, setFilterGroup] = useState<string>('ALL');
   const [filterPersonnel, setFilterPersonnel] = useState<string>('ALL');
+  const [hoveredDay, setHoveredDay] = useState<string | null>(null);
+  const [selectedDayDetails, setSelectedDayDetails] = useState<string | null>(null);
 
   const todayStr = toLocalDateStr(new Date());
 
@@ -371,25 +373,71 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
       days.push(
         <div 
           key={day} 
+          onMouseEnter={() => setHoveredDay(dateStr)}
+          onMouseLeave={() => setHoveredDay(null)}
+          onClick={() => setSelectedDayDetails(dateStr)}
           className={cn(
-            "h-28 border p-2 overflow-hidden flex flex-col hover:bg-white/[0.02] transition-colors group relative",
-            isToday ? "bg-emerald-500/5 border-emerald-500/50" : "bg-[#111114] border-white/5",
-            isGuest ? "cursor-default" : "cursor-default"
+            "h-28 border p-2 flex flex-col hover:bg-white/[0.02] transition-colors group relative cursor-pointer",
+            isToday ? "bg-emerald-500/5 border-emerald-500/50" : "bg-[#111114] border-white/5"
           )}
         >
           {isToday && (
             <div className="absolute top-0 left-0 w-full h-1 bg-emerald-500 animate-pulse z-10" />
           )}
+ 
+          {/* Detailed Tooltip Overlay - Now "popping out" with better shadow */}
+          <AnimatePresence>
+            {hoveredDay === dateStr && activeSchedules.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-[60] w-64 bg-[#16161a] p-3 shadow-[0_20px_50px_rgba(0,0,0,0.8)] border border-white/10 rounded-xl backdrop-blur-md flex flex-col pointer-events-none"
+              >
+                <div className="flex items-center justify-between mb-2 border-b border-white/5 pb-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+                    <span className="text-[10px] font-black text-white uppercase tracking-widest">Active Crew ({activeSchedules.length})</span>
+                  </div>
+                  <span className="text-[9px] font-mono text-slate-500">{day} {currentDate.toLocaleString('default', { month: 'short' })}</span>
+                </div>
+                <div className="max-h-48 overflow-y-auto custom-scrollbar space-y-1.5">
+                  {activeSchedules.map(s => {
+                    const p = personnel.find(pers => pers.id === s.personnelId);
+                    if (!p) return null;
+                    return (
+                      <div key={s.id} className="flex items-start justify-between gap-2 bg-white/[0.03] p-1.5 rounded-lg border border-white/5">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[10px] font-bold text-slate-200 truncate uppercase leading-tight">{p.fullName}</p>
+                          <p className="text-[8px] text-slate-500 uppercase truncate leading-tight italic">{p.rosterGroup} • {p.title}</p>
+                        </div>
+                        <span className={cn(
+                          "text-[7px] px-1.5 py-0.5 rounded-sm font-black uppercase text-white h-fit",
+                          s.status === 'TRANSIT' ? "bg-blue-600" : "bg-emerald-600"
+                        )}>
+                          {s.status === 'TRANSIT' ? 'In Trns' : 'On Dty'}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-2 text-center">
+                  <p className="text-[7px] text-emerald-500/50 font-black uppercase tracking-tighter">Click to see full details</p>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+ 
           <div className="flex items-center justify-between mb-1 relative z-10">
              <span className={cn("text-[10px] font-mono", isToday ? "text-emerald-500 font-black" : "text-slate-500")}>{day}</span>
              {!isGuest && (
                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                 <button onClick={() => handleOpenAdd(dateStr)} className="p-0.5 hover:text-blue-500 text-slate-700 transition-colors" title="Add Duty"><Plus size={10} /></button>
-                 <button onClick={() => handleOpenAddEvent(dateStr)} className="p-0.5 hover:text-emerald-500 text-slate-700 transition-colors" title="Add Event"><Tag size={8} /></button>
+                 <button onClick={(e) => { e.stopPropagation(); handleOpenAdd(dateStr); }} className="p-0.5 hover:text-blue-500 text-slate-700 transition-colors" title="Add Duty"><Plus size={10} /></button>
+                 <button onClick={(e) => { e.stopPropagation(); handleOpenAddEvent(dateStr); }} className="p-0.5 hover:text-emerald-500 text-slate-700 transition-colors" title="Add Event"><Tag size={8} /></button>
                </div>
              )}
           </div>
-          <div className="flex-1 space-y-1 overflow-y-auto custom-scrollbar">
+          <div className="flex-1 space-y-1 overflow-hidden">
             {activeEvents.map(ev => {
               const colors = eventTypeColors[ev.type] || eventTypeColors.general;
               return (
@@ -1266,6 +1314,138 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {selectedDayDetails && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedDayDetails(null)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-md"
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="relative w-full max-w-2xl bg-[#0a0a0c] border border-white/10 rounded-2xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden"
+            >
+              <div className="p-6 border-b border-white/5 bg-gradient-to-r from-blue-600/10 to-emerald-600/10 flex items-center justify-between">
+                <div>
+                   <h3 className="text-xl font-black text-white uppercase tracking-widest flex items-center gap-3">
+                     <CalendarIcon className="text-blue-500" />
+                     {formatDate(selectedDayDetails)}
+                   </h3>
+                   <p className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.2em] mt-1 ml-9">Daily Activity Overview</p>
+                </div>
+                <button onClick={() => setSelectedDayDetails(null)} className="p-2 text-slate-500 hover:text-white transition-colors bg-white/5 rounded-xl">
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
+                {/* Hub Events Section */}
+                <section>
+                  <div className="flex items-center gap-2 mb-4 border-l-4 border-emerald-500 pl-4">
+                    <h4 className="text-xs font-black text-emerald-500 uppercase tracking-widest">Hub Events</h4>
+                    <span className="text-[9px] bg-emerald-500/10 text-emerald-500 px-2 rounded-full font-bold">
+                      {events.filter(e => selectedDayDetails >= e.startDate && selectedDayDetails <= e.endDate).length}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {events.filter(e => selectedDayDetails >= e.startDate && selectedDayDetails <= e.endDate).map(ev => {
+                      const colors = eventTypeColors[ev.type] || eventTypeColors.general;
+                      return (
+                        <div key={ev.id} className={cn("p-4 rounded-xl border flex gap-4 bg-white/[0.02]", colors.border)}>
+                           <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center shrink-0", colors.bg)}>
+                              {getEventIcon(ev.type, 20)}
+                           </div>
+                           <div className="min-w-0 flex-1">
+                              <p className={cn("text-[8px] font-black uppercase tracking-widest mb-1", colors.text)}>{ev.type}</p>
+                              <h5 className="text-sm font-bold text-white truncate">{ev.title}</h5>
+                              <p className="text-[10px] text-slate-500 mt-1 line-clamp-2 leading-relaxed font-medium">{ev.description || 'No additional details provided for this event.'}</p>
+                              <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between">
+                                 <span className="text-[9px] font-mono text-slate-600">{formatDate(ev.startDate)}</span>
+                                 <button onClick={() => { setSelectedDayDetails(null); handleEditEvent(ev); }} className="text-[8px] font-black text-white px-2 py-1 bg-white/5 hover:bg-white/10 rounded uppercase transition-colors">Edit Event</button>
+                              </div>
+                           </div>
+                        </div>
+                      );
+                    })}
+                    {events.filter(e => selectedDayDetails >= e.startDate && selectedDayDetails <= e.endDate).length === 0 && (
+                      <div className="col-span-full py-8 text-center bg-white/[0.02] border border-dashed border-white/5 rounded-xl">
+                        <Tag size={24} className="mx-auto text-slate-800 mb-2" />
+                        <p className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">No global events scheduled for this day</p>
+                      </div>
+                    )}
+                  </div>
+                </section>
+
+                {/* Personnel on Duty Section */}
+                <section>
+                  <div className="flex items-center gap-2 mb-4 border-l-4 border-blue-500 pl-4">
+                    <h4 className="text-xs font-black text-blue-500 uppercase tracking-widest">Personnel on Duty</h4>
+                    <span className="text-[9px] bg-blue-500/10 text-blue-500 px-2 rounded-full font-bold">
+                      {filteredSchedules.filter(s => selectedDayDetails >= s.startDate && selectedDayDetails <= s.endDate).length}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {filteredSchedules.filter(s => selectedDayDetails >= s.startDate && selectedDayDetails <= s.endDate).map(s => {
+                      const p = personnel.find(pers => pers.id === s.personnelId);
+                      if (!p) return null;
+                      return (
+                        <div key={s.id} className="p-3 rounded-xl bg-white/[0.03] border border-white/5 group hover:border-blue-500/30 transition-all flex flex-col justify-between">
+                           <div className="mb-4">
+                              <div className="flex items-center justify-between mb-2">
+                                 <span className={cn(
+                                   "text-[8px] px-2 py-0.5 rounded-full font-black text-white",
+                                   getGroupColor(p.rosterGroup)
+                                 )}>
+                                   {p.rosterGroup}
+                                 </span>
+                                 <span className={cn(
+                                   "text-[8px] font-black uppercase text-white px-2 py-0.5 rounded border border-white/10",
+                                   s.status === 'TRANSIT' ? "bg-blue-600" : "bg-emerald-600"
+                                 )}>
+                                   {s.status}
+                                 </span>
+                              </div>
+                              <h5 className="text-xs font-bold text-slate-200 uppercase truncate">{p.fullName}</h5>
+                              <p className="text-[10px] text-slate-500 font-mono mt-0.5">{p.title}</p>
+                           </div>
+                           <div className="pt-3 border-t border-white/5 flex items-center justify-between">
+                              <p className="text-[8px] text-slate-600 font-mono italic">Ends: {formatDate(s.endDate)}</p>
+                              <button onClick={() => { setSelectedDayDetails(null); handleEdit(s); }} className="text-[9px] font-black text-blue-500 opacity-0 group-hover:opacity-100 uppercase transition-all">Go to Duty</button>
+                           </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              </div>
+
+              <div className="p-6 border-t border-white/5 bg-black/40 flex gap-4">
+                 {!isGuest && (
+                   <>
+                     <button 
+                       onClick={() => { setSelectedDayDetails(null); handleOpenAdd(selectedDayDetails); }}
+                       className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-blue-500/20"
+                     >
+                       Assign Duty
+                     </button>
+                     <button 
+                       onClick={() => { setSelectedDayDetails(null); handleOpenAddEvent(selectedDayDetails); }}
+                       className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-emerald-500/20"
+                     >
+                       Schedule Event
+                     </button>
+                   </>
+                 )}
+              </div>
             </motion.div>
           </div>
         )}
