@@ -64,6 +64,8 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
   const [filterGroup, setFilterGroup] = useState<string>('ALL');
   const [filterPersonnel, setFilterPersonnel] = useState<string>('ALL');
 
+  const todayStr = toLocalDateStr(new Date());
+
   const groupColors: Record<string, string> = {
     'A': 'bg-blue-600',
     'B': 'bg-emerald-600',
@@ -364,16 +366,22 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
       });
       const activeEvents = events.filter(e => dateStr >= e.startDate && dateStr <= e.endDate);
 
+      const isToday = dateStr === todayStr;
+
       days.push(
         <div 
           key={day} 
           className={cn(
-            "h-28 bg-[#111114] border border-white/5 p-2 overflow-hidden flex flex-col hover:bg-white/[0.02] transition-colors group",
+            "h-28 border p-2 overflow-hidden flex flex-col hover:bg-white/[0.02] transition-colors group relative",
+            isToday ? "bg-emerald-500/5 border-emerald-500/50" : "bg-[#111114] border-white/5",
             isGuest ? "cursor-default" : "cursor-default"
           )}
         >
-          <div className="flex items-center justify-between mb-1">
-             <span className="text-[10px] font-mono text-slate-500">{day}</span>
+          {isToday && (
+            <div className="absolute top-0 left-0 w-full h-1 bg-emerald-500 animate-pulse z-10" />
+          )}
+          <div className="flex items-center justify-between mb-1 relative z-10">
+             <span className={cn("text-[10px] font-mono", isToday ? "text-emerald-500 font-black" : "text-slate-500")}>{day}</span>
              {!isGuest && (
                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                  <button onClick={() => handleOpenAdd(dateStr)} className="p-0.5 hover:text-blue-500 text-slate-700 transition-colors" title="Add Duty"><Plus size={10} /></button>
@@ -451,23 +459,26 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
       const d = new Date(startOfWeek);
       d.setDate(startOfWeek.getDate() + i);
       const dateStr = toLocalDateStr(d);
-      return { date: d, dateStr };
+      const isToday = dateStr === todayStr;
+      return { date: d, dateStr, isToday };
     });
 
     return (
       <div className="overflow-x-auto md:overflow-x-visible custom-scrollbar">
         <div className="grid grid-cols-7 border-t border-l border-white/5 h-[450px] md:h-[600px] min-w-[320px] md:min-w-0">
-        {weekDays.map(({ date, dateStr }) => (
+        {weekDays.map(({ date, dateStr, isToday }) => (
           <div 
             key={dateStr} 
             className={cn(
-              "bg-[#111114] border-b border-r border-white/5 flex flex-col hover:bg-white/[0.01] transition-colors group",
+              "bg-[#111114] border-b border-r border-white/5 flex flex-col hover:bg-white/[0.01] transition-colors group relative",
+              isToday ? "bg-emerald-500/5" : "",
               isGuest ? "cursor-default" : "cursor-default"
             )}
           >
-            <div className="bg-black/40 py-2 text-center border-b border-white/5 relative">
-              <p className="text-[10px] font-bold text-slate-400 uppercase">{date.toLocaleDateString('default', { weekday: 'short' })}</p>
-              <p className="text-[14px] font-mono text-white">{date.getDate()}</p>
+            {isToday && <div className="absolute top-0 left-0 w-full h-1 bg-emerald-500 animate-pulse z-20" />}
+            <div className={cn("bg-black/40 py-2 text-center border-b border-white/5 relative", isToday ? "bg-emerald-500/10" : "")}>
+              <p className={cn("text-[10px] font-bold uppercase", isToday ? "text-emerald-500" : "text-slate-400")}>{date.toLocaleDateString('default', { weekday: 'short' })}</p>
+              <p className={cn("text-[14px] font-mono", isToday ? "text-emerald-500 font-black" : "text-white")}>{date.getDate()}</p>
               {!isGuest && (
                 <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button onClick={() => handleOpenAdd(dateStr)} className="p-1 hover:text-blue-500 text-slate-700" title="Add Duty"><Plus size={12} /></button>
@@ -674,46 +685,64 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
     ];
 
     const dayWidth = 32; 
-    const timelineDates: { date: Date, dateStr: string }[] = [];
+    const timelineDates: { date: Date, dateStr: string, isToday: boolean }[] = [];
     
     monthsToShow.forEach(m => {
        const days = daysInMonth(m.getFullYear(), m.getMonth());
        for(let i=1; i<=days; i++) {
          const d = new Date(m.getFullYear(), m.getMonth(), i);
-         timelineDates.push({ date: d, dateStr: toLocalDateStr(d) });
+         const dateStr = toLocalDateStr(d);
+         timelineDates.push({ date: d, dateStr, isToday: dateStr === todayStr });
        }
     });
 
     return (
-      <div className="overflow-x-auto custom-scrollbar border rounded-xl" style={{ backgroundColor: 'var(--theme-container)', borderColor: 'var(--theme-border)' }}>
+      <div className="overflow-x-auto custom-scrollbar border rounded-xl relative" style={{ backgroundColor: 'var(--theme-container)', borderColor: 'var(--theme-border)', maxHeight: '700px', overflowY: 'auto' }}>
         <div style={{ width: timelineDates.length * dayWidth + 192 }}>
           {/* Header */}
-          <div className="flex border-b border-white/5 bg-black/60 sticky top-0 z-20">
-            <div className="w-48 shrink-0 border-r border-white/5 p-3 text-[10px] font-black text-slate-400 bg-black/20 uppercase tracking-widest">Crew Roster</div>
+          <div className="flex border-b border-white/5 bg-[#111114] sticky top-0 z-40">
+            <div className="w-48 shrink-0 border-r border-white/5 p-3 text-[10px] font-black text-slate-400 bg-[#16161a] uppercase tracking-widest sticky left-0 z-50">Crew Roster</div>
             <div className="flex-1 flex overflow-hidden">
               {monthsToShow.map(m => {
                 const days = daysInMonth(m.getFullYear(), m.getMonth());
                 return (
-                  <div key={m.getTime()} style={{ width: days * dayWidth }} className="shrink-0 text-center text-[9px] font-black text-slate-300 py-1 bg-white/[0.02] border-r border-white/5 uppercase">
+                  <div key={m.getTime()} style={{ width: days * dayWidth }} className="shrink-0 text-center text-[9px] font-black text-slate-300 py-3 bg-white/[0.02] border-r border-white/5 uppercase">
                     {m.toLocaleString('default', { month: 'long', year: 'numeric' })}
                   </div>
                 );
               })}
             </div>
           </div>
-          <div className="flex border-b border-white/5 bg-black/40 sticky top-[25px] z-20">
-            <div className="w-48 shrink-0 border-r border-white/5"></div>
+          <div className="flex border-b border-white/5 bg-[#0a0a0c] sticky top-[42px] z-40">
+            <div className="w-48 shrink-0 border-r border-white/5 sticky left-0 z-50 bg-[#111114]"></div>
             <div className="flex-1 flex">
-              {timelineDates.map(({ date }, i) => (
+              {timelineDates.map(({ date, isToday }, i) => (
                 <div key={i} style={{ width: dayWidth }} className={cn(
-                  "shrink-0 text-center text-[8px] font-bold py-1 border-r border-white/5",
-                  date.getDay() === 0 || date.getDay() === 6 ? "bg-white/[0.03] text-slate-400" : "text-slate-600"
+                  "shrink-0 text-center text-[8px] font-bold py-1.5 border-r border-white/5 relative",
+                  isToday ? "bg-emerald-500/20 text-emerald-400" : (date.getDay() === 0 || date.getDay() === 6 ? "bg-white/[0.03] text-slate-400" : "text-slate-600")
                 )}>
                   {date.getDate()}
+                  {isToday && (
+                    <div className="absolute top-0 left-0 w-full h-0.5 bg-emerald-500 animate-pulse" />
+                  )}
                 </div>
               ))}
             </div>
           </div>
+
+          {/* Today Indicator Line (Full Height) */}
+          {(() => {
+            const todayIdx = timelineDates.findIndex(td => td.isToday);
+            if (todayIdx === -1) return null;
+            return (
+              <div 
+                className="absolute top-0 bottom-0 z-20 w-px bg-emerald-500/40 pointer-events-none"
+                style={{ left: 192 + todayIdx * dayWidth + (dayWidth / 2) }}
+              >
+                <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full -ml-[3px] mt-[42px] animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
+              </div>
+            );
+          })()}
 
           {/* Rows */}
           <div className="divide-y divide-white/5 relative">
@@ -726,7 +755,7 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
 
             {/* Hub Events Row */}
             <div className="flex group hover:bg-white/[0.01] relative z-20">
-              <div className="w-48 shrink-0 border-r border-white/5 p-3 bg-emerald-900/10">
+              <div className="w-48 shrink-0 border-r border-white/5 p-3 bg-[#16161a] sticky left-0 z-30">
                 <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest flex items-center gap-2">
                   <Tag size={12} /> Hub Events
                 </p>
@@ -781,7 +810,7 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
 
             {sortedPersonnel.map(p => (
               <div key={p.id} className="flex group hover:bg-white/[0.01] relative z-10">
-                <div className="w-48 shrink-0 border-r border-white/5 p-3 bg-black/10">
+                <div className="w-48 shrink-0 border-r border-white/5 p-3 bg-[#111114] sticky left-0 z-30">
                   <p className="text-[10px] font-bold text-[var(--theme-text)] uppercase truncate">{p.fullName}</p>
                   <p className={cn(
                     "text-[8px] px-1.5 rounded-sm w-fit font-mono uppercase font-black mt-0.5 text-white",

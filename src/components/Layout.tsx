@@ -15,7 +15,7 @@ interface LayoutProps {
 export function Layout({ children, user, isGuest, activeTab, onTabChange, onLogout }: LayoutProps) {
   const navItems = ([
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'personnel', label: 'Crew Roster', icon: Users },
+    { id: 'personnel', label: 'Drilling Crews', icon: Users },
     { id: 'flights', label: 'Ticketing', icon: Plane },
     !isGuest && { id: 'settings', label: 'Settings', icon: Settings },
   ] as const).filter(Boolean) as { id: 'dashboard' | 'personnel' | 'flights' | 'settings', label: string, icon: any }[];

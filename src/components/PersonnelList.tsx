@@ -121,7 +121,7 @@ export function PersonnelList({ isGuest }: PersonnelListProps) {
               )}
             >
               <LayoutGrid size={12} className="md:w-[16px] md:h-[16px]" />
-              <span>Crews</span>
+              <span>Drilling Crews</span>
             </button>
             <button 
               onClick={() => setViewType('calendar')}
@@ -133,7 +133,7 @@ export function PersonnelList({ isGuest }: PersonnelListProps) {
               )}
             >
               <CalendarIcon size={12} className="md:w-[16px] md:h-[16px]" />
-              <span>Sched</span>
+              <span>Schedule</span>
             </button>
           </div>
 
@@ -233,7 +233,7 @@ export function PersonnelList({ isGuest }: PersonnelListProps) {
               className="relative w-full max-w-lg bg-[#111114] border border-white/10 p-8 rounded-2xl shadow-2xl"
             >
               <h3 className="text-lg font-bold text-white uppercase tracking-tight mb-6">
-                {editingPersonnel ? 'Edit Crew Member' : 'Crew Member Entry'}
+                {editingPersonnel ? 'Edit Drilling Crew' : 'Drilling Crew Entry'}
               </h3>
               
               <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
