@@ -1,13 +1,15 @@
-import { useState, useEffect, useMemo, MouseEvent } from 'react';
+import { useState, useEffect, useMemo, MouseEvent, useRef } from 'react';
 import { collection, onSnapshot, query, addDoc, updateDoc, doc, deleteDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Personnel, Scheduling, ScheduleStatus, HubEvent } from '../types';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Users, Clock, LayoutGrid, Plus, Trash2, X, AlertCircle, Wrench, Info, Palmtree, Tag } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Users, Clock, LayoutGrid, Plus, Trash2, X, AlertCircle, Wrench, Info, Palmtree, Tag, Search, SortAsc, Copy, FileDown, Eye, EyeOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn, formatDate } from '../lib/utils';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { toPng } from 'html-to-image';
+import jsPDF from 'jspdf';
 
 const scheduleSchema = z.object({
   personnelIds: z.array(z.string()).min(1, 'At least one personnel is required'),
@@ -63,8 +65,14 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
   const [sortBy, setSortBy] = useState<'name' | 'group'>('name');
   const [filterGroup, setFilterGroup] = useState<string>('ALL');
   const [filterPersonnel, setFilterPersonnel] = useState<string>('ALL');
+  const [showGlobalEvents, setShowGlobalEvents] = useState(true);
   const [hoveredDay, setHoveredDay] = useState<string | null>(null);
   const [selectedDayDetails, setSelectedDayDetails] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isExportSettingsOpen, setIsExportSettingsOpen] = useState(false);
+  const [exportYear, setExportYear] = useState(currentDate.getFullYear());
+  const [exportMonth, setExportMonth] = useState(currentDate.getMonth());
+  const ganttRef = useRef<HTMLDivElement>(null);
   const [hoveredWeekItem, setHoveredWeekItem] = useState<{
     id: string;
     rect: { top: number, left: number, width: number };
@@ -102,10 +110,14 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
       return true;
     })
     .sort((a, b) => {
-    if (sortBy === 'name') return a.fullName.localeCompare(b.fullName);
-    if (sortBy === 'group') return a.rosterGroup.localeCompare(b.rosterGroup);
-    return 0;
-  });
+      if (sortBy === 'name') return a.fullName.localeCompare(b.fullName);
+      if (sortBy === 'group') {
+        const groupCmp = a.rosterGroup.localeCompare(b.rosterGroup);
+        if (groupCmp !== 0) return groupCmp;
+        return a.fullName.localeCompare(b.fullName);
+      }
+      return 0;
+    });
 
   const filteredSchedules = useMemo(() => {
     return schedules.filter(s => {
@@ -328,6 +340,52 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
     if (confirm('Delete this duty record?')) {
       await deleteDoc(doc(db, 'schedules', id));
     }
+  };
+
+  const handleCopyToClipboard = () => {
+    const summary = sortedPersonnel.map(p => {
+      const pSchedules = schedules.filter(s => s.personnelId === p.id);
+      return `${p.fullName} (${p.rosterGroup}): ${pSchedules.length} duty periods assigned.`;
+    }).join('\n');
+    
+    navigator.clipboard.writeText(summary);
+    alert('Crew schedule summary copied to clipboard!');
+  };
+
+  const handleExportPDF = () => {
+    setExportYear(currentDate.getFullYear());
+    setExportMonth(currentDate.getMonth());
+    setIsExportSettingsOpen(true);
+  };
+
+  const confirmExport = async () => {
+    if (!ganttRef.current) return;
+    setIsExportSettingsOpen(false);
+    setIsExporting(true);
+
+    // Update view date and mode to requested export month
+    const exportDate = new Date(exportYear, exportMonth, 1);
+    setCurrentDate(exportDate);
+    setViewMode('gantt');
+
+    // Wait for render
+    setTimeout(async () => {
+      try {
+        const dataUrl = await toPng(ganttRef.current!, { 
+          backgroundColor: '#0a0a0c',
+          quality: 1,
+          pixelRatio: 2
+        });
+        const pdf = new jsPDF('l', 'px', [ganttRef.current!.scrollWidth, ganttRef.current!.scrollHeight]);
+        pdf.addImage(dataUrl, 'PNG', 0, 0, ganttRef.current!.scrollWidth, ganttRef.current!.scrollHeight);
+        const exportMonthStr = String(exportMonth + 1).padStart(2, '0');
+        pdf.save(`Crew_Roster_${exportYear}_${exportMonthStr}.pdf`);
+      } catch (err) {
+        console.error('Export failed', err);
+      } finally {
+        setIsExporting(false);
+      }
+    }, 1000);
   };
 
   const daysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
@@ -785,8 +843,8 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
     
-    // Show 3 months for better scrollable Gantt context
-    const monthsToShow = [
+    // Only show the target month during export to keep the PDF focused
+    const monthsToShow = isExporting ? [new Date(year, month, 1)] : [
       new Date(year, month - 1, 1),
       new Date(year, month, 1),
       new Date(year, month + 1, 1)
@@ -805,7 +863,7 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
     });
 
     return (
-      <div className="overflow-x-auto custom-scrollbar border rounded-xl relative" style={{ backgroundColor: 'var(--theme-container)', borderColor: 'var(--theme-border)', maxHeight: '700px', overflowY: 'auto' }}>
+      <div className="overflow-x-auto custom-scrollbar border rounded-xl relative" ref={ganttRef} style={{ backgroundColor: 'var(--theme-container)', borderColor: 'var(--theme-border)', maxHeight: '700px', overflowY: 'auto' }}>
         <div style={{ width: timelineDates.length * dayWidth + 192 }}>
           {/* Header */}
           <div className="flex border-b border-white/5 bg-[#111114] sticky top-0 z-40">
@@ -862,59 +920,61 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
             </div>
 
             {/* Hub Events Row */}
-            <div className="flex group hover:bg-white/[0.01] relative z-20">
-              <div className="w-48 shrink-0 border-r border-white/5 p-3 bg-[#16161a] sticky left-0 z-30">
-                <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest flex items-center gap-2">
-                  <Tag size={12} /> Hub Events
-                </p>
-                <p className="text-[8px] text-slate-600 font-mono uppercase mt-1">General Schedule</p>
-              </div>
-              <div className="flex-1 relative flex h-14 items-center">
-                {events.map(ev => {
-                  const colors = eventTypeColors[ev.type] || eventTypeColors.general;
-                  const findIndex = (dateStr: string) => timelineDates.findIndex(td => td.dateStr === dateStr);
-                  let startIdx = findIndex(ev.startDate);
-                  let endIdx = findIndex(ev.endDate);
-                  if (startIdx === -1 && endIdx === -1) return null;
-                  if (startIdx === -1) startIdx = 0;
-                  if (endIdx === -1) endIdx = timelineDates.length - 1;
-                  const left = startIdx * dayWidth;
-                  const width = (endIdx - startIdx + 1) * dayWidth;
-                  return (
-                    <div 
-                      key={ev.id}
-                      style={{ left, width }}
-                      onClick={(e) => { e.stopPropagation(); handleEditEvent(ev); }}
-                      className={cn(
-                        "absolute h-8 rounded-lg flex items-center gap-2 px-3 border cursor-pointer hover:scale-[1.02] transition-all z-10 group/ev",
-                        colors.border, colors.bg, colors.text
-                      )}
-                    >
-                      {getEventIcon(ev.type, 10)}
-                      <span className="text-[9px] font-black uppercase tracking-widest truncate">{ev.title}</span>
-                      
-                      {/* Enhanced Tooltip for Hub Events - SHOWN BELOW */}
-                      <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-56 bg-slate-900 border border-white/10 p-3 rounded-xl shadow-2xl opacity-0 group-hover/ev:opacity-100 invisible group-hover/ev:visible transition-all z-50 pointer-events-none">
-                         <div className={cn("w-full h-1 absolute top-0 left-0 rounded-t-xl", colors.solid)} />
-                         <div className="flex items-center justify-between mb-1">
-                           <p className="text-[10px] font-black text-white uppercase">{ev.title}</p>
-                           <span className={cn("text-[8px] font-black uppercase tracking-tighter", colors.text)}>{ev.type}</span>
-                         </div>
-                         <p className="text-[9px] text-slate-400 leading-tight mb-2 italic">
-                           {ev.description || 'Global hub-wide event'}
-                         </p>
-                         <div className="flex items-center gap-2 text-[9px] font-mono border-t border-white/5 pt-2">
-                           <CalendarIcon size={10} className={colors.text} />
-                           <span className="text-white">{formatDate(ev.startDate)}</span>
-                           <span className="text-slate-500">-</span>
-                           <span className="text-white">{formatDate(ev.endDate)}</span>
-                         </div>
+            {showGlobalEvents && (
+              <div className="flex group hover:bg-white/[0.01] relative z-20">
+                <div className="w-48 shrink-0 border-r border-white/5 p-3 bg-[#16161a] sticky left-0 z-30">
+                  <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest flex items-center gap-2">
+                    <Tag size={12} /> Hub Events
+                  </p>
+                  <p className="text-[8px] text-slate-600 font-mono uppercase mt-1">General Schedule</p>
+                </div>
+                <div className="flex-1 relative flex h-14 items-center">
+                  {events.map(ev => {
+                    const colors = eventTypeColors[ev.type] || eventTypeColors.general;
+                    const findIndex = (dateStr: string) => timelineDates.findIndex(td => td.dateStr === dateStr);
+                    let startIdx = findIndex(ev.startDate);
+                    let endIdx = findIndex(ev.endDate);
+                    if (startIdx === -1 && endIdx === -1) return null;
+                    if (startIdx === -1) startIdx = 0;
+                    if (endIdx === -1) endIdx = timelineDates.length - 1;
+                    const left = startIdx * dayWidth;
+                    const width = (endIdx - startIdx + 1) * dayWidth;
+                    return (
+                      <div 
+                        key={ev.id}
+                        style={{ left, width }}
+                        onClick={(e) => { e.stopPropagation(); handleEditEvent(ev); }}
+                        className={cn(
+                          "absolute h-8 rounded-lg flex items-center gap-2 px-3 border cursor-pointer hover:scale-[1.02] transition-all z-10 group/ev",
+                          colors.border, colors.bg, colors.text
+                        )}
+                      >
+                        {getEventIcon(ev.type, 10)}
+                        <span className="text-[9px] font-black uppercase tracking-widest truncate">{ev.title}</span>
+                        
+                        {/* Enhanced Tooltip for Hub Events - SHOWN BELOW */}
+                        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-56 bg-slate-900 border border-white/10 p-3 rounded-xl shadow-2xl opacity-0 group-hover/ev:opacity-100 invisible group-hover/ev:visible transition-all z-50 pointer-events-none">
+                           <div className={cn("w-full h-1 absolute top-0 left-0 rounded-t-xl", colors.solid)} />
+                           <div className="flex items-center justify-between mb-1">
+                             <p className="text-[10px] font-black text-white uppercase">{ev.title}</p>
+                             <span className={cn("text-[8px] font-black uppercase tracking-tighter", colors.text)}>{ev.type}</span>
+                           </div>
+                           <p className="text-[9px] text-slate-400 leading-tight mb-2 italic">
+                             {ev.description || 'Global hub-wide event'}
+                           </p>
+                           <div className="flex items-center gap-2 text-[9px] font-mono border-t border-white/5 pt-2">
+                             <CalendarIcon size={10} className={colors.text} />
+                             <span className="text-white">{formatDate(ev.startDate)}</span>
+                             <span className="text-slate-500">-</span>
+                             <span className="text-white">{formatDate(ev.endDate)}</span>
+                           </div>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            )}
 
             {sortedPersonnel.map(p => (
               <div key={p.id} className="flex group hover:bg-white/[0.01] relative z-10">
@@ -995,8 +1055,93 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
 
   return (
     <div className="space-y-6">
+      {/* Search and Filters Bar */}
+      <div className="flex flex-wrap items-center gap-4 bg-white/[0.02] border border-white/5 p-4 rounded-2xl">
+        <div className="flex-1 min-w-[200px] relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
+          <select 
+            value={filterPersonnel}
+            onChange={(e) => setFilterPersonnel(e.target.value)}
+            className="w-full bg-black/40 border border-white/10 rounded-xl pl-10 pr-4 py-2 text-[10px] font-black text-white uppercase tracking-widest focus:outline-none focus:border-blue-500/50 transition-all appearance-none"
+          >
+            <option value="ALL">All Crew Members</option>
+            {personnel.map(p => (
+              <option key={p.id} value={p.id}>{p.fullName}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Users className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
+            <select 
+              value={filterGroup}
+              onChange={(e) => setFilterGroup(e.target.value)}
+              className="bg-black/40 border border-white/10 rounded-xl pl-10 pr-8 py-2 text-[10px] font-black text-white uppercase tracking-widest focus:outline-none focus:border-blue-500/50 appearance-none"
+            >
+              <option value="ALL">All Groups</option>
+              {uniqueGroups.map(g => (
+                <option key={g} value={g}>{g}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="relative">
+            <SortAsc className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
+            <select 
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as any)}
+              className="bg-black/40 border border-white/10 rounded-xl pl-10 pr-8 py-2 text-[10px] font-black text-white uppercase tracking-widest focus:outline-none focus:border-blue-500/50 appearance-none"
+            >
+              <option value="name">Sort by Name</option>
+              <option value="group">Sort by Group</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 ml-auto">
+          <button 
+            onClick={() => setShowGlobalEvents(!showGlobalEvents)}
+            className={cn(
+              "p-2 rounded-xl border transition-all flex items-center gap-2 text-[9px] font-black uppercase tracking-widest",
+              showGlobalEvents ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" : "bg-white/5 border-white/10 text-slate-500"
+            )}
+            title="Toggle Global Events"
+          >
+            {showGlobalEvents ? <Eye size={14} /> : <EyeOff size={14} />}
+            <span className="hidden sm:inline">Global Events</span>
+          </button>
+
+          <div className="h-6 w-px bg-white/10 mx-2" />
+
+          <button 
+            onClick={handleCopyToClipboard}
+            className="p-2 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 text-slate-300 transition-all flex items-center gap-2"
+            title="Copy Summary"
+          >
+            <Copy size={14} />
+            <span className="text-[9px] font-black uppercase tracking-widest hidden sm:inline">Copy</span>
+          </button>
+
+          <button 
+            onClick={handleExportPDF}
+            disabled={isExporting}
+            className={cn(
+              "p-2 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 text-slate-300 transition-all flex items-center gap-2",
+              isExporting && "opacity-50 cursor-not-allowed"
+            )}
+            title="Export as PDF"
+          >
+            <FileDown size={14} />
+            <span className="text-[9px] font-black uppercase tracking-widest hidden sm:inline">
+              {isExporting ? 'EXPORTING...' : 'PDF'}
+            </span>
+          </button>
+        </div>
+      </div>
+
       {/* Controls */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 md:gap-6 mb-8">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 md:gap-6">
         <div className="flex flex-wrap gap-1.5 md:gap-2 order-2 lg:order-1">
           {(['month', 'week', 'personnel', 'gantt'] as ViewMode[]).map(mode => (
             <button
@@ -1505,6 +1650,86 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                      </button>
                    </>
                  )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Export Settings Modal */}
+      <AnimatePresence>
+        {isExportSettingsOpen && (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsExportSettingsOpen(false)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 10 }}
+              className="relative w-full max-w-sm bg-[#16161a] border border-white/10 rounded-2xl shadow-2xl p-6 overflow-hidden"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-bold text-white uppercase tracking-widest flex items-center gap-3">
+                  <FileDown size={18} className="text-blue-500" />
+                  PDF Export Options
+                </h3>
+                <button onClick={() => setIsExportSettingsOpen(false)} className="p-2 text-slate-500 hover:text-white transition-colors">
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] text-slate-500 uppercase font-bold px-1">Select Export Period</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <select 
+                      value={exportMonth}
+                      onChange={(e) => setExportMonth(parseInt(e.target.value))}
+                      className="bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs font-black text-white uppercase tracking-widest focus:outline-none focus:border-blue-500"
+                    >
+                      {Array.from({ length: 12 }).map((_, i) => (
+                        <option key={i} value={i}>
+                          {new Date(2000, i).toLocaleString('default', { month: 'long' })}
+                        </option>
+                      ))}
+                    </select>
+                    <select 
+                      value={exportYear}
+                      onChange={(e) => setExportYear(parseInt(e.target.value))}
+                      className="bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs font-black text-white uppercase tracking-widest focus:outline-none focus:border-blue-500"
+                    >
+                      {[2024, 2025, 2026, 2027].map(y => (
+                        <option key={y} value={y}>{y}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="bg-blue-500/5 border border-blue-500/10 p-3 rounded-xl">
+                  <p className="text-[9px] text-blue-400 font-bold leading-relaxed uppercase italic">
+                    The export will capture the Gantt chart for the selected month including all active duty periods and hub events.
+                  </p>
+                </div>
+
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => setIsExportSettingsOpen(false)}
+                    className="flex-1 px-4 py-3 rounded-xl bg-black border border-white/5 text-slate-400 text-xs font-bold uppercase tracking-widest hover:text-white transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    onClick={confirmExport}
+                    className="flex-[2] px-4 py-3 rounded-xl bg-blue-600 text-white text-xs font-bold uppercase tracking-widest hover:bg-blue-500 transition-all shadow-lg shadow-blue-900/40"
+                  >
+                    Start Export
+                  </button>
+                </div>
               </div>
             </motion.div>
           </div>

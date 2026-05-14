@@ -1,36 +1,14 @@
 import { useEffect, useRef } from 'react';
 
 export function WeatherWidget() {
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    // The script provided by metar-taf.com
-    const scriptId = 'metartaf-script';
-    
-    // Cleanup any existing script to force re-execution
-    const existingScript = document.getElementById(scriptId);
-    if (existingScript) {
-      existingScript.remove();
-    }
-
-    const script = document.createElement('script');
-    script.id = scriptId;
-    // Exactly as provided by user: target=EAEi70uD
-    script.src = 'https://metar-taf.com/embed-js/DAUH?qnh=hPa&rh=rh&target=EAEi70uD';
-    script.async = true;
-    script.defer = true;
-    script.crossOrigin = 'anonymous';
-    
-    // Appending to the container instead of body to ensure proximity
-    if (containerRef.current) {
-      containerRef.current.appendChild(script);
-    }
-
-    return () => {
-      const s = document.getElementById(scriptId);
-      if (s) s.remove();
-    };
-  }, []);
+  const iframeContent = `
+    <html>
+      <body style="margin: 0; padding: 0; background: transparent; overflow: hidden; display: flex; justify-content: center;">
+        <a href="https://metar-taf.com/metar/DAUH" id="metartaf-EAEi70uD" style="font-size:18px; font-weight:500; color:#000; width:300px; height:435px; display:block; text-decoration: none; font-family: sans-serif;">METAR Hassi Messaoud Airport</a>
+        <script async defer crossorigin="anonymous" src="https://metar-taf.com/embed-js/DAUH?qnh=hPa&rh=rh&target=EAEi70uD"></script>
+      </body>
+    </html>
+  `;
 
   return (
     <div className="theme-container h-full p-4 bg-white border-white flex flex-col items-center shadow-xl">
@@ -38,24 +16,13 @@ export function WeatherWidget() {
         <h3 className="text-[10px] font-black text-slate-900 uppercase tracking-[0.2em]">METAR Live Feed</h3>
         <span className="text-[8px] text-blue-600 font-bold uppercase tracking-tight">DAUH / HASSI MESSAOUD</span>
       </div>
-      <div ref={containerRef} className="w-full overflow-hidden flex justify-center bg-slate-50 rounded-xl p-2 border border-slate-200 flex-1 min-h-[445px]">
-        <a 
-          href="https://metar-taf.com/metar/DAUH" 
-          id="metartaf-EAEi70uD" 
-          style={{
-            fontSize: '18px', 
-            fontWeight: '500', 
-            color: '#000', 
-            width: '300px', 
-            height: '435px', 
-            display: 'block',
-            textDecoration: 'none',
-            textAlign: 'center',
-            paddingTop: '20px'
-          }}
-        >
-          METAR Hassi Messaoud-Oued Irara Krim Belkacem Airport
-        </a>
+      <div className="w-full overflow-hidden flex justify-center bg-slate-50 rounded-xl p-2 border border-slate-200 flex-1 min-h-[445px]">
+        <iframe
+          srcDoc={iframeContent}
+          style={{ width: '300px', height: '435px', border: 'none' }}
+          title="Weather Widget"
+          scrolling="no"
+        />
       </div>
       <div className="mt-4 flex items-center gap-2">
         <div className="w-1 h-1 rounded-full bg-blue-600 animate-pulse" />
