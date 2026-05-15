@@ -571,45 +571,45 @@ export function Dashboard({ isGuest }: DashboardProps) {
       <motion.div 
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="theme-container bg-gradient-to-r from-blue-900/10 via-slate-900/5 to-emerald-900/10 border-white/5 p-3 flex flex-wrap items-center justify-center gap-6 md:gap-12"
+        className="theme-container bg-gradient-to-r from-blue-900/10 via-slate-900/5 to-emerald-900/10 border-white/5 p-4 md:p-3 flex flex-col md:flex-row items-center justify-center gap-6 md:gap-12"
       >
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 shrink-0">
           <Globe className="text-blue-500 animate-pulse-slow" size={14} />
-          <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Ops Intelligence</h3>
+          <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-300">Ops Intelligence</h3>
         </div>
 
-        <div className="flex items-center gap-8 md:gap-16">
+        <div className="flex flex-col sm:flex-row items-center gap-6 md:gap-16 w-full md:w-auto">
           {[
             { id: 'JKT', city: 'Jakarta, ID', time: times.jakarta, weather: weather?.jakarta, color: 'emerald', timezone: 'Asia/Jakarta' },
             { id: 'ALG', city: 'Algiers, DZ', time: times.algiers, weather: weather?.algiers, color: 'blue', timezone: 'Africa/Algiers' }
           ].map(location => (
-            <div key={location.id} className="flex items-center gap-4 group">
+            <div key={location.id} className="flex items-center justify-between sm:justify-start gap-4 p-3 md:p-0 bg-white/[0.03] md:bg-transparent border border-white/10 md:border-0 rounded-2xl md:rounded-none w-full sm:w-auto group">
               <div className="flex items-center gap-3">
-                <div className={cn("w-7 h-7 rounded-lg flex items-center justify-center font-black text-[10px] border shadow-xl transition-all group-hover:scale-110", 
+                <div className={cn("w-8 h-8 rounded-xl flex items-center justify-center font-black text-[10px] border shadow-xl transition-all group-hover:scale-110", 
                   location.id === 'JKT' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-blue-500/10 text-blue-400 border-blue-500/20"
                 )}>
                   {location.id}
                 </div>
                  <div>
                   <div className="flex flex-col">
-                    <p className="text-xl font-mono font-black text-white tracking-wider leading-none mb-1">{location.time}</p>
+                    <p className="text-xl md:text-2xl font-mono font-black text-white tracking-wider leading-none mb-1">{location.time}</p>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-slate-300 font-black uppercase tracking-widest">{new Date().toLocaleDateString('en-GB', { timeZone: location.timezone, day: '2-digit', month: 'short', year: 'numeric' })}</span>
-                      <span className="text-[10px] text-slate-600 font-black uppercase tracking-tighter opacity-60">— {location.city.split(',')[0]}</span>
+                      <span className="text-[10px] md:text-xs text-slate-300 font-black uppercase tracking-widest">{new Date().toLocaleDateString('en-GB', { timeZone: location.timezone, day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                      <span className="text-[9px] md:text-[10px] text-slate-600 font-black uppercase tracking-tighter opacity-60">— {location.city.split(',')[0]}</span>
                     </div>
                   </div>
                 </div>
               </div>
               
               {location.weather && (
-                <div className="flex items-center gap-3 pl-4 border-l border-white/5">
+                <div className="flex items-center gap-3 pl-4 border-l border-white/10 md:border-white/5">
                   <div className="flex items-center gap-1.5">
                     {getWeatherIcon(location.weather.desc)}
-                    <span className="text-[11px] font-mono font-black text-slate-300">{location.weather.temp}°C</span>
+                    <span className="text-xs md:text-[11px] font-mono font-black text-slate-300">{location.weather.temp}°C</span>
                   </div>
-                  <div className="flex flex-col">
+                  <div className="flex flex-col sm:hidden lg:flex">
                     <span className="text-[7px] font-black text-slate-600 uppercase leading-none mb-0.5">AQI</span>
-                    <span className={cn("text-[9px] font-black uppercase leading-none", getAQIInfo(location.weather.aqi).color)}>
+                    <span className={cn("text-[10px] md:text-[9px] font-black uppercase leading-none", getAQIInfo(location.weather.aqi).color)}>
                       {location.weather.aqi || '--'}
                     </span>
                   </div>
