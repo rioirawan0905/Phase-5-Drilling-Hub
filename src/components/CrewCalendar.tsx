@@ -103,21 +103,52 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
     return 'opacity-40 grayscale';
   };
 
-  const sortedPersonnel = [...personnel]
-    .filter(p => {
-      if (filterGroup !== 'ALL' && p.rosterGroup !== filterGroup) return false;
-      if (filterPersonnel !== 'ALL' && p.id !== filterPersonnel) return false;
-      return true;
-    })
-    .sort((a, b) => {
-      if (sortBy === 'name') return a.fullName.localeCompare(b.fullName);
-      if (sortBy === 'group') {
-        const groupCmp = a.rosterGroup.localeCompare(b.rosterGroup);
-        if (groupCmp !== 0) return groupCmp;
-        return a.fullName.localeCompare(b.fullName);
-      }
-      return 0;
-    });
+  const sortedPersonnel = useMemo(() => {
+    let list = [...personnel];
+    
+    // Virtual Personnel for Hub Events
+    const hubVirtual: Personnel = {
+      id: 'HUB_EVENTS',
+      fullName: 'Hub Events',
+      title: 'General Schedule',
+      email: 'system@hub.local',
+      rosterGroup: 'GLOBAL'
+    };
+
+    if (showGlobalEvents) {
+      list.push(hubVirtual);
+    }
+
+    return list
+      .filter(p => {
+        if (p.id === 'HUB_EVENTS') {
+          // Hub events only shown if personnel filter is ALL or if explicitly enabled
+          if (filterPersonnel !== 'ALL') return false;
+          if (filterGroup !== 'ALL' && filterGroup !== 'GLOBAL') return false;
+          return true;
+        }
+        if (filterGroup !== 'ALL' && p.rosterGroup !== filterGroup) return false;
+        if (filterPersonnel !== 'ALL' && p.id !== filterPersonnel) return false;
+        return true;
+      })
+      .sort((a, b) => {
+        // Always keep Hub at top or follow sorting?
+        // Let's make Hub sort specifically if needed, but usually top is best or alpha.
+        if (sortBy === 'name') {
+          if (a.id === 'HUB_EVENTS') return -1;
+          if (b.id === 'HUB_EVENTS') return 1;
+          return a.fullName.localeCompare(b.fullName);
+        }
+        if (sortBy === 'group') {
+          if (a.id === 'HUB_EVENTS') return -1;
+          if (b.id === 'HUB_EVENTS') return 1;
+          const groupCmp = a.rosterGroup.localeCompare(b.rosterGroup);
+          if (groupCmp !== 0) return groupCmp;
+          return a.fullName.localeCompare(b.fullName);
+        }
+        return 0;
+      });
+  }, [personnel, filterGroup, filterPersonnel, sortBy, showGlobalEvents]);
 
   const filteredSchedules = useMemo(() => {
     return schedules.filter(s => {
@@ -919,74 +950,77 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
               ))}
             </div>
 
-            {/* Hub Events Row */}
-            {showGlobalEvents && (
-              <div className="flex group hover:bg-white/[0.01] relative z-20">
-                <div className="w-48 shrink-0 border-r border-white/5 p-3 bg-[#16161a] sticky left-0 z-30">
-                  <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest flex items-center gap-2">
-                    <Tag size={12} /> Hub Events
-                  </p>
-                  <p className="text-[8px] text-slate-600 font-mono uppercase mt-1">General Schedule</p>
-                </div>
-                <div className="flex-1 relative flex h-14 items-center">
-                  {events.map(ev => {
-                    const colors = eventTypeColors[ev.type] || eventTypeColors.general;
-                    const findIndex = (dateStr: string) => timelineDates.findIndex(td => td.dateStr === dateStr);
-                    let startIdx = findIndex(ev.startDate);
-                    let endIdx = findIndex(ev.endDate);
-                    if (startIdx === -1 && endIdx === -1) return null;
-                    if (startIdx === -1) startIdx = 0;
-                    if (endIdx === -1) endIdx = timelineDates.length - 1;
-                    const left = startIdx * dayWidth;
-                    const width = (endIdx - startIdx + 1) * dayWidth;
-                    return (
-                      <div 
-                        key={ev.id}
-                        style={{ left, width }}
-                        onClick={(e) => { e.stopPropagation(); handleEditEvent(ev); }}
-                        className={cn(
-                          "absolute h-8 rounded-lg flex items-center gap-2 px-3 border cursor-pointer hover:scale-[1.02] transition-all z-10 group/ev",
-                          colors.border, colors.bg, colors.text
-                        )}
-                      >
-                        {getEventIcon(ev.type, 10)}
-                        <span className="text-[9px] font-black uppercase tracking-widest truncate">{ev.title}</span>
-                        
-                        {/* Enhanced Tooltip for Hub Events - SHOWN BELOW */}
-                        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-56 bg-slate-900 border border-white/10 p-3 rounded-xl shadow-2xl opacity-0 group-hover/ev:opacity-100 invisible group-hover/ev:visible transition-all z-50 pointer-events-none">
-                           <div className={cn("w-full h-1 absolute top-0 left-0 rounded-t-xl", colors.solid)} />
-                           <div className="flex items-center justify-between mb-1">
-                             <p className="text-[10px] font-black text-white uppercase">{ev.title}</p>
-                             <span className={cn("text-[8px] font-black uppercase tracking-tighter", colors.text)}>{ev.type}</span>
-                           </div>
-                           <p className="text-[9px] text-slate-400 leading-tight mb-2 italic">
-                             {ev.description || 'Global hub-wide event'}
-                           </p>
-                           <div className="flex items-center gap-2 text-[9px] font-mono border-t border-white/5 pt-2">
-                             <CalendarIcon size={10} className={colors.text} />
-                             <span className="text-white">{formatDate(ev.startDate)}</span>
-                             <span className="text-slate-500">-</span>
-                             <span className="text-white">{formatDate(ev.endDate)}</span>
-                           </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {sortedPersonnel.map(p => (
-              <div key={p.id} className="flex group hover:bg-white/[0.01] relative z-10">
-                <div className="w-48 shrink-0 border-r border-white/5 p-3 bg-[#111114] sticky left-0 z-30">
-                  <p className="text-[10px] font-bold text-[var(--theme-text)] uppercase truncate">{p.fullName}</p>
-                  <p className={cn(
-                    "text-[8px] px-1.5 rounded-sm w-fit font-mono uppercase font-black mt-0.5 text-white",
-                    getGroupColor(p.rosterGroup)
-                  )}>{p.rosterGroup}</p>
-                </div>
-                <div className="flex-1 relative flex h-12 items-center">
-                  {filteredSchedules.filter(s => s.personnelId === p.id).map(s => {
+            {/* Integrated Rows */}
+            {sortedPersonnel.map(p => {
+              if (p.id === 'HUB_EVENTS') {
+                return (
+                  <div key="HUB_EVENTS" className="flex group hover:bg-white/[0.01] relative z-20">
+                    <div className="w-48 shrink-0 border-r border-white/5 p-3 bg-[#16161a] sticky left-0 z-30">
+                      <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest flex items-center gap-2">
+                        <Tag size={12} /> Hub Events
+                      </p>
+                      <p className="text-[8px] text-slate-600 font-mono uppercase mt-1">General Schedule</p>
+                    </div>
+                    <div className="flex-1 relative flex h-14 items-center">
+                      {events.map(ev => {
+                        const colors = eventTypeColors[ev.type] || eventTypeColors.general;
+                        const findIndex = (dateStr: string) => timelineDates.findIndex(td => td.dateStr === dateStr);
+                        let startIdx = findIndex(ev.startDate);
+                        let endIdx = findIndex(ev.endDate);
+                        if (startIdx === -1 && endIdx === -1) return null;
+                        if (startIdx === -1) startIdx = 0;
+                        if (endIdx === -1) endIdx = timelineDates.length - 1;
+                        const left = startIdx * dayWidth;
+                        const width = (endIdx - startIdx + 1) * dayWidth;
+                        return (
+                          <div 
+                            key={ev.id}
+                            style={{ left, width }}
+                            onClick={(e) => { e.stopPropagation(); handleEditEvent(ev); }}
+                            className={cn(
+                              "absolute h-8 rounded-lg flex items-center gap-2 px-3 border cursor-pointer hover:scale-[1.02] transition-all z-10 group/ev text-white",
+                              colors.border, colors.bg, colors.text
+                            )}
+                          >
+                            {getEventIcon(ev.type, 10)}
+                            <span className="text-[9px] font-black uppercase tracking-widest truncate">{ev.title}</span>
+                            
+                            {/* Enhanced Tooltip for Hub Events */}
+                            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-56 bg-slate-900 border border-white/10 p-3 rounded-xl shadow-2xl opacity-0 group-hover/ev:opacity-100 invisible group-hover/ev:visible transition-all z-50 pointer-events-none">
+                               <div className={cn("w-full h-1 absolute top-0 left-0 rounded-t-xl", colors.solid)} />
+                               <div className="flex items-center justify-between mb-1">
+                                 <p className="text-[10px] font-black text-white uppercase">{ev.title}</p>
+                                 <span className={cn("text-[8px] font-black uppercase tracking-tighter", colors.text)}>{ev.type}</span>
+                               </div>
+                               <p className="text-[9px] text-slate-400 leading-tight mb-2 italic">
+                                 {ev.description || 'Global hub-wide event'}
+                               </p>
+                               <div className="flex items-center gap-2 text-[9px] font-mono border-t border-white/5 pt-2">
+                                 <CalendarIcon size={10} className={colors.text} />
+                                 <span className="text-white">{formatDate(ev.startDate)}</span>
+                                 <span className="text-slate-500">-</span>
+                                 <span className="text-white">{formatDate(ev.endDate)}</span>
+                               </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              }
+              
+              return (
+                <div key={p.id} className="flex group hover:bg-white/[0.01] relative z-10">
+                  <div className="w-48 shrink-0 border-r border-white/5 p-3 bg-[#111114] sticky left-0 z-30">
+                    <p className="text-[10px] font-bold text-[var(--theme-text)] uppercase truncate">{p.fullName}</p>
+                    <p className={cn(
+                      "text-[8px] px-1.5 rounded-sm w-fit font-mono uppercase font-black mt-0.5 text-white",
+                      getGroupColor(p.rosterGroup)
+                    )}>{p.rosterGroup}</p>
+                  </div>
+                  <div className="flex-1 relative flex h-12 items-center">
+                    {filteredSchedules.filter(s => s.personnelId === p.id).map(s => {
                     const findIndex = (dateStr: string) => timelineDates.findIndex(td => td.dateStr === dateStr);
                     let startIdx = findIndex(s.startDate);
                     let endIdx = findIndex(s.endDate);
@@ -1046,8 +1080,9 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                   })}
                 </div>
               </div>
-            ))}
-          </div>
+            );
+          })}
+        </div>
         </div>
       </div>
     );

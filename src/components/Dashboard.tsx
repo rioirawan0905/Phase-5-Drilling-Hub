@@ -591,12 +591,12 @@ export function Dashboard({ isGuest }: DashboardProps) {
                 )}>
                   {location.id}
                 </div>
-                <div>
+                 <div>
                   <div className="flex flex-col">
-                    <p className="text-sm font-mono font-black text-white tracking-wider leading-none mb-1">{location.time}</p>
+                    <p className="text-xl font-mono font-black text-white tracking-wider leading-none mb-1">{location.time}</p>
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-slate-300 font-black uppercase tracking-widest">{new Date().toLocaleDateString('en-GB', { timeZone: location.timezone, day: '2-digit', month: 'short', year: 'numeric' })}</span>
-                      <span className="text-[9px] text-slate-600 font-black uppercase tracking-tighter opacity-60">— {location.city.split(',')[0]}</span>
+                      <span className="text-xs text-slate-300 font-black uppercase tracking-widest">{new Date().toLocaleDateString('en-GB', { timeZone: location.timezone, day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                      <span className="text-[10px] text-slate-600 font-black uppercase tracking-tighter opacity-60">— {location.city.split(',')[0]}</span>
                     </div>
                   </div>
                 </div>

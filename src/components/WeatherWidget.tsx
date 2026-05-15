@@ -6,11 +6,14 @@ export function WeatherWidget() {
     <html>
       <head>
         <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+          body { margin: 0; padding: 0; background: transparent; overflow: hidden; display: flex; justify-content: center; }
+          #container { width: 300px; padding-top: 10px; }
+        </style>
       </head>
-      <body style="margin: 0; padding: 0; background: #ffffff; overflow: hidden; display: flex; justify-content: center;">
-        <div style="width: 300px; padding-top: 20px;">
-          <a href="https://metar-taf.com/metar/DAUH" id="metartaf-EAEi70uD" style="font-size:18px; font-weight:500; color:#000; width:300px; height:435px; display:block; text-decoration: none; font-family: sans-serif; text-align: center;">Loading METAR Data...</a>
+      <body>
+        <div id="container">
+          <a href="https://metar-taf.com/metar/DAUH" id="metartaf-EAEi70uD" style="font-size:18px; font-weight:500; color:#000; width:300px; height:435px; display:block; text-decoration: none; font-family: sans-serif; text-align: center; color: #64748b;">Loading Weather...</a>
           <script async defer crossorigin="anonymous" src="https://metar-taf.com/embed-js/DAUH?qnh=hPa&rh=rh&target=EAEi70uD"></script>
         </div>
       </body>
@@ -23,12 +26,13 @@ export function WeatherWidget() {
         <h3 className="text-[10px] font-black text-slate-900 uppercase tracking-[0.2em]">METAR Live Feed</h3>
         <span className="text-[8px] text-blue-600 font-bold uppercase tracking-tight">DAUH / HASSI MESSAOUD</span>
       </div>
-      <div className="w-full overflow-hidden flex justify-center bg-slate-50 rounded-xl p-2 border border-slate-200 flex-1 min-h-[445px]">
+      <div className="w-full overflow-hidden flex justify-center bg-slate-50 rounded-xl border border-slate-200 flex-1 min-h-[445px]">
         <iframe
           srcDoc={iframeContent}
-          style={{ width: '300px', height: '435px', border: 'none' }}
+          style={{ width: '310px', height: '445px', border: 'none' }}
           title="Weather Widget"
           scrolling="no"
+          sandbox="allow-scripts allow-same-origin"
         />
       </div>
       <div className="mt-4 flex items-center gap-2">
