@@ -10,7 +10,6 @@ import * as XLSX from 'xlsx';
 import { toBlob } from 'html-to-image';
 
 import { PersonnelMap } from './PersonnelMap';
-import { WeatherWidget } from './WeatherWidget';
 
 interface DashboardProps {
   isGuest?: boolean;
@@ -686,8 +685,8 @@ export function Dashboard({ isGuest }: DashboardProps) {
           </div>
         </div>
         
-        <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 items-stretch">
-          <div className="xl:col-span-3">
+        <div className="grid grid-cols-1 gap-6 items-stretch">
+          <div className="w-full">
             <PersonnelMap 
               onDutyPersonnel={personnel.filter(p => {
                  const now = new Date();
@@ -703,9 +702,6 @@ export function Dashboard({ isGuest }: DashboardProps) {
                  });
               })} 
             />
-          </div>
-          <div className="xl:col-span-1">
-            <WeatherWidget />
           </div>
         </div>
       </motion.div>
