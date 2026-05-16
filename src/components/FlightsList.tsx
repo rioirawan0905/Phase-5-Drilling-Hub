@@ -172,7 +172,7 @@ export function FlightsList({ isGuest }: FlightsListProps) {
   };
 
   const getStatusStyle = (status: FlightStatus, requestedDate?: string | null) => {
-    if (status === 'Received') return "bg-emerald-500/20 text-emerald-400 border-emerald-500/30";
+    if (status === 'Received') return "bg-emerald-600 text-white border-emerald-500/30";
     
     // Explicit or Auto "Need Action" logic
     let isUrgent = status === 'Need Action';
@@ -185,11 +185,12 @@ export function FlightsList({ isGuest }: FlightsListProps) {
     }
 
     if (isUrgent) {
-      return "bg-rose-500/20 text-rose-500 border-rose-500/30 animate-pulse font-bold px-2 py-0.5 rounded";
+      return "bg-rose-600 text-white animate-pulse font-bold px-2 py-0.5 rounded shadow-[0_0_10px_rgba(225,29,72,0.3)]";
     }
 
-    if (status === 'Not Requested') return "bg-slate-500/10 text-slate-500 border-white/5 px-2 py-0.5 rounded";
-    return "bg-blue-500/20 text-blue-400 border-blue-500/30 font-bold px-2 py-0.5 rounded text-center min-w-[70px]";
+    if (status === 'Not Requested') return "bg-amber-500 text-white border-amber-400/30 px-2 py-0.5 rounded"; // Pending
+    if (status === 'Requested') return "bg-blue-600 text-white font-bold px-2 py-0.5 rounded text-center min-w-[70px] shadow-[0_0_10px_rgba(37,99,235,0.2)]";
+    return "bg-indigo-600 text-white font-bold px-2 py-0.5 rounded text-center min-w-[70px] shadow-[0_0_10px_rgba(79,70,229,0.2)]";
   };
 
   const getStatusLabel = (status: FlightStatus, requestedDate?: string | null) => {
@@ -269,8 +270,8 @@ export function FlightsList({ isGuest }: FlightsListProps) {
       {/* View Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-2">
         <div>
-          <h2 className="text-xs md:text-sm font-semibold uppercase tracking-wider text-white">Flight Ticket Request</h2>
-          <p className="text-[9px] md:text-[10px] text-slate-500 uppercase tracking-widest mt-0.5">Manifest Terminal</p>
+          <h2 className="text-xs md:text-sm font-semibold uppercase tracking-wider text-[var(--theme-text)]">Flight Ticket Request</h2>
+          <p className="text-[9px] md:text-[10px] text-[var(--theme-text-muted)] font-extrabold uppercase tracking-widest mt-0.5">Manifest Terminal</p>
         </div>
         
         <div className="flex items-center gap-3 w-full md:w-auto">
@@ -286,19 +287,19 @@ export function FlightsList({ isGuest }: FlightsListProps) {
       </div>
 
       {/* Filters Bar */}
-      <div className="flex flex-col gap-4 p-3 md:p-4 bg-black/20 border border-white/5 rounded-xl">
+      <div className="flex flex-col gap-4 p-3 md:p-4 bg-[var(--theme-card)] border border-[var(--theme-border)] rounded-xl shadow-sm">
         <div className="flex items-center gap-2">
-          <Filter size={12} className="text-slate-500" />
-          <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Filters</span>
+          <Filter size={12} className="text-[var(--theme-text-muted)]" />
+          <span className="text-[9px] font-bold text-[var(--theme-text-muted)] uppercase tracking-widest">Filters</span>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 flex-1">
           <div className="space-y-1">
-            <label className="text-[8px] text-slate-500 uppercase font-bold px-1">Month</label>
+            <label className="text-[8px] text-[var(--theme-text-muted)] uppercase font-bold px-1">Month</label>
             <select 
               value={filterMonth}
               onChange={(e) => setFilterMonth(e.target.value)}
-              className="w-full bg-[#111114] border border-white/5 px-2 md:px-3 py-1.5 text-[9px] md:text-[10px] text-slate-300 rounded-lg focus:outline-none"
+              className="w-full bg-[var(--theme-status)] border border-[var(--theme-border)] px-2 md:px-3 py-1.5 text-[9px] md:text-[10px] text-[var(--theme-text)] rounded-lg focus:outline-none"
             >
               <option value="ALL">ALL MONTHS</option>
               {[
@@ -313,11 +314,11 @@ export function FlightsList({ isGuest }: FlightsListProps) {
           </div>
 
           <div className="space-y-1">
-            <label className="text-[8px] text-slate-500 uppercase font-bold px-1">Year</label>
+            <label className="text-[8px] text-[var(--theme-text-muted)] uppercase font-bold px-1">Year</label>
             <select 
               value={filterYear}
               onChange={(e) => setFilterYear(e.target.value)}
-              className="w-full bg-[#111114] border border-white/5 px-2 md:px-3 py-1.5 text-[9px] md:text-[10px] text-slate-300 rounded-lg focus:outline-none"
+              className="w-full bg-[var(--theme-status)] border border-[var(--theme-border)] px-2 md:px-3 py-1.5 text-[9px] md:text-[10px] text-[var(--theme-text)] rounded-lg focus:outline-none"
             >
               <option value="ALL">ALL YEARS</option>
               <option value="2024">2024</option>
@@ -327,11 +328,11 @@ export function FlightsList({ isGuest }: FlightsListProps) {
           </div>
 
           <div className="space-y-1">
-            <label className="text-[8px] text-slate-500 uppercase font-bold px-1">Group</label>
+            <label className="text-[8px] text-[var(--theme-text-muted)] uppercase font-bold px-1">Group</label>
             <select 
               value={filterGroup}
               onChange={(e) => setFilterGroup(e.target.value)}
-              className="w-full bg-[#111114] border border-white/5 px-2 md:px-3 py-1.5 text-[9px] md:text-[10px] text-slate-300 rounded-lg focus:outline-none"
+              className="w-full bg-[var(--theme-status)] border border-[var(--theme-border)] px-2 md:px-3 py-1.5 text-[9px] md:text-[10px] text-[var(--theme-text)] rounded-lg focus:outline-none"
             >
               <option value="ALL">ALL GROUPS</option>
               {uniqueGroups.map(g => (
@@ -341,11 +342,11 @@ export function FlightsList({ isGuest }: FlightsListProps) {
           </div>
 
           <div className="space-y-1">
-            <label className="text-[8px] text-slate-500 uppercase font-bold px-1">Personnel</label>
+            <label className="text-[8px] text-[var(--theme-text-muted)] uppercase font-bold px-1">Personnel</label>
             <select 
               value={filterPersonnel}
               onChange={(e) => setFilterPersonnel(e.target.value)}
-              className="w-full bg-[#111114] border border-white/5 px-2 md:px-3 py-1.5 text-[9px] md:text-[10px] text-slate-300 rounded-lg focus:outline-none"
+              className="w-full bg-[var(--theme-status)] border border-[var(--theme-border)] px-2 md:px-3 py-1.5 text-[9px] md:text-[10px] text-[var(--theme-text)] rounded-lg focus:outline-none"
             >
               <option value="ALL">ALL PERSONNEL</option>
               {personnel.sort((a,b) => a.fullName.localeCompare(b.fullName)).map(p => (
@@ -356,23 +357,23 @@ export function FlightsList({ isGuest }: FlightsListProps) {
         </div>
       </div>
 
-      {/* Flight Manifest Theme Container */}
-      <div className="theme-container overflow-hidden">
+      {/* Table Container */}
+      <div className="bg-[var(--theme-card)] border border-[var(--theme-border)] rounded-2xl overflow-hidden shadow-xl shadow-black/5">
         <div className="overflow-x-auto md:overflow-x-visible custom-scrollbar">
           {/* Desktop Table */}
           <table className="hidden md:table w-full text-left min-w-[800px] md:min-w-0">
-          <thead className="text-[10px] text-slate-500 uppercase tracking-widest bg-black/20">
+          <thead className="text-[10px] text-[var(--theme-text-muted)] uppercase tracking-widest bg-[var(--theme-status)] border-b border-[var(--theme-border)]">
             <tr>
-              <th className="py-3 px-6 font-normal">Personnel</th>
-              <th className="py-3 px-6 font-normal">Duty Period</th>
-              <th className="py-3 px-6 font-normal">Transit Route / Leg Control</th>
-              <th className="py-3 px-6 font-normal text-right">Actions</th>
+              <th className="py-4 px-6 font-black">Personnel</th>
+              <th className="py-4 px-6 font-black">Duty Period</th>
+              <th className="py-4 px-6 font-black">Transit Route / Leg Control</th>
+              <th className="py-4 px-6 font-black text-right">Actions</th>
             </tr>
           </thead>
-          <tbody className="text-xs divide-y divide-white/5">
+          <tbody className="text-xs divide-y divide-[var(--theme-border)]">
             {filteredFlights.length === 0 ? (
               <tr>
-                <td colSpan={4} className="py-20 text-center text-[10px] uppercase font-mono text-slate-700 tracking-widest">
+                <td colSpan={4} className="py-20 text-center text-[10px] uppercase font-mono text-[var(--theme-text-muted)] tracking-widest">
                   No active requests in system
                 </td>
               </tr>
@@ -380,73 +381,76 @@ export function FlightsList({ isGuest }: FlightsListProps) {
               filteredFlights.sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)).map((f) => {
                 const person = personnel.find(p => p.id === f.personnelId);
                 return (
-                  <tr key={f.id} className="hover:bg-white/[0.02] transition-colors group border-b border-white/5">
+                  <tr key={f.id} className="hover:bg-[var(--theme-status)] transition-colors group">
                     <td className="py-4 px-6 align-top">
-                      <p className="font-semibold text-white">{person?.fullName || 'UNKNOWN'}</p>
-                      <p className="text-[10px] text-slate-500 font-mono italic">{person?.title || 'No Title'}</p>
-                      <div className="mt-2 text-[8px] font-mono text-slate-700">ID-{f.id.slice(0,8).toUpperCase()}</div>
+                      <p className="font-black text-[var(--theme-text)] uppercase tracking-tight">{person?.fullName || 'UNKNOWN'}</p>
+                      <p className="text-[10px] text-[var(--theme-text-muted)] font-mono font-bold uppercase tracking-widest mt-1">{person?.rosterGroup || 'LOGISTICS CORE'}</p>
                     </td>
-                    <td className="py-4 px-6 text-slate-400 font-mono whitespace-nowrap align-top">
+                    <td className="py-4 px-6 text-[var(--theme-text-muted)] font-mono whitespace-nowrap align-top">
                       <div className="flex items-center gap-2">
-                        <Calendar size={10} className="text-slate-700" />
-                        {f.startDate ? `${formatDate(f.startDate)} — ${formatDate(f.endDate)}` : 'N/A'}
+                        <Calendar size={10} className="text-[var(--theme-text-muted)] opacity-50" />
+                        <span className="font-black tracking-tighter text-[var(--theme-text)]">{f.startDate ? `${formatDate(f.startDate)} — ${formatDate(f.endDate)}` : 'N/A'}</span>
                       </div>
                     </td>
                     <td className="py-4 px-6 align-top">
                       <div className="space-y-3 min-w-[400px]">
                         {f.requestedDateIDtoDZ && (
-                          <div className="flex items-center justify-between p-2 rounded bg-emerald-500/5 border border-emerald-500/10">
+                          <div className="flex items-center justify-between p-3 rounded-xl bg-[var(--theme-status)] border border-[var(--theme-border)]">
                             <div className="flex items-center gap-3">
-                              <ArrowLeft size={12} className="text-emerald-400" />
+                              <ArrowLeft size={12} className="text-emerald-600" />
                               <div>
-                                <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Indonesia → Algeria</p>
-                                <p className="text-[11px] text-white font-mono">{formatDate(f.requestedDateIDtoDZ)}</p>
+                                <p className="text-[9px] font-black text-[var(--theme-text-muted)] uppercase tracking-widest">INDONESIA → ALGERIA</p>
+                                <p className="text-[11px] text-[var(--theme-text)] font-mono font-black">{formatDate(f.requestedDateIDtoDZ)}</p>
                               </div>
                             </div>
                             <div className="flex items-center gap-4">
                               <span className={cn(
-                                "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter border",
+                                "px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border shadow-sm",
                                 getStatusLabel(f.statusIDtoDZ || 'Requested', f.requestedDateIDtoDZ) === 'Need Action'
-                                  ? "bg-rose-500/20 text-rose-500 border-rose-500/30 animate-pulse font-bold"
+                                  ? "bg-rose-600 text-white border-rose-500/20"
                                   : f.statusIDtoDZ === 'Received'
-                                    ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
-                                    : "bg-emerald-500/5 text-emerald-400 border-emerald-500/10"
+                                    ? "bg-emerald-600 text-white border-emerald-500/20"
+                                    : f.statusIDtoDZ === 'Requested'
+                                      ? "bg-blue-600 text-white border-blue-500/20"
+                                      : "bg-amber-500 text-white border-amber-400/20"
                               )}>
-                                {getStatusLabel(f.statusIDtoDZ || 'Requested', f.requestedDateIDtoDZ)}
+                                {getStatusLabel(f.statusIDtoDZ || 'Requested', f.requestedDateIDtoID)}
                               </span>
                               {!isGuest ? (
                                 <select 
                                   onChange={(e) => updateTransitStatus(f.id, 'IDtoDZ', e.target.value as FlightStatus)}
                                   value={f.statusIDtoDZ || 'Requested'}
-                                  className="bg-black/40 border border-white/5 text-[9px] text-slate-400 px-2 py-1 rounded focus:outline-none focus:border-emerald-500/30 font-bold uppercase"
+                                  className="bg-[var(--theme-card)] border border-[var(--theme-border)] text-[9px] text-[var(--theme-text)] px-3 py-1 rounded-lg focus:outline-none focus:border-blue-500 font-black uppercase tracking-widest"
                                 >
                                   <option value="Not Requested">Not Requested</option>
                                   <option value="Requested">Requested</option>
                                   <option value="Received">Received</option>
                                 </select>
                               ) : (
-                                <span className="text-[9px] text-slate-500 font-bold uppercase">Locked</span>
+                                <span className="text-[9px] text-[var(--theme-text-muted)] font-bold uppercase">Locked</span>
                               )}
                             </div>
                           </div>
                         )}
                         {f.requestedDateDZtoID && (
-                          <div className="flex items-center justify-between p-2 rounded bg-blue-500/5 border border-blue-500/10">
+                          <div className="flex items-center justify-between p-3 rounded-xl bg-[var(--theme-status)] border border-[var(--theme-border)]">
                             <div className="flex items-center gap-3">
-                              <ArrowRight size={12} className="text-blue-400" />
+                              <ArrowRight size={12} className="text-blue-600" />
                               <div>
-                                <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Algeria → Indonesia</p>
-                                <p className="text-[11px] text-white font-mono">{formatDate(f.requestedDateDZtoID)}</p>
+                                <p className="text-[9px] font-black text-[var(--theme-text-muted)] uppercase tracking-widest">ALGERIA → INDONESIA</p>
+                                <p className="text-[11px] text-[var(--theme-text)] font-mono font-black">{formatDate(f.requestedDateDZtoID)}</p>
                               </div>
                             </div>
                             <div className="flex items-center gap-4">
                               <span className={cn(
-                                "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter border",
+                                "px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border shadow-sm",
                                 getStatusLabel(f.statusDZtoID || 'Requested', f.requestedDateDZtoID) === 'Need Action'
-                                  ? "bg-rose-500/20 text-rose-500 border-rose-500/30 animate-pulse font-bold"
+                                  ? "bg-rose-600 text-white border-rose-500/20"
                                   : f.statusDZtoID === 'Received'
-                                    ? "bg-blue-500/20 text-blue-400 border-blue-500/30"
-                                    : "bg-blue-500/5 text-blue-400 border-blue-500/10"
+                                    ? "bg-emerald-600 text-white border-emerald-500/20"
+                                    : f.statusDZtoID === 'Requested'
+                                      ? "bg-blue-600 text-white border-blue-500/20"
+                                      : "bg-amber-500 text-white border-amber-400/20"
                               )}>
                                 {getStatusLabel(f.statusDZtoID || 'Requested', f.requestedDateDZtoID)}
                               </span>
@@ -454,14 +458,14 @@ export function FlightsList({ isGuest }: FlightsListProps) {
                                 <select 
                                   onChange={(e) => updateTransitStatus(f.id, 'DZtoID', e.target.value as FlightStatus)}
                                   value={f.statusDZtoID || 'Requested'}
-                                  className="bg-black/40 border border-white/5 text-[9px] text-slate-400 px-2 py-1 rounded focus:outline-none focus:border-blue-500/30 font-bold uppercase"
+                                  className="bg-[var(--theme-card)] border border-[var(--theme-border)] text-[9px] text-[var(--theme-text)] px-3 py-1 rounded-lg focus:outline-none focus:border-blue-500 font-black uppercase tracking-widest"
                                 >
                                   <option value="Not Requested">Not Requested</option>
                                   <option value="Requested">Requested</option>
                                   <option value="Received">Received</option>
                                 </select>
                               ) : (
-                                <span className="text-[9px] text-slate-500 font-bold uppercase">Locked</span>
+                                <span className="text-[9px] text-[var(--theme-text-muted)] font-bold uppercase">Locked</span>
                               )}
                             </div>
                           </div>
@@ -471,8 +475,8 @@ export function FlightsList({ isGuest }: FlightsListProps) {
                     <td className="py-4 px-6 text-right whitespace-nowrap">
                       {!isGuest && (
                         <div className="flex flex-col items-end gap-2">
-                           <button onClick={() => handleEditFlight(f)} className="p-1 px-2 text-[10px] font-bold text-slate-500 hover:text-white uppercase flex items-center gap-1 border border-white/5 rounded w-fit"><Pencil size={11} /> Edit</button>
-                           <button onClick={() => setDeleteConfirmId(f.id)} className="p-1 px-2 text-[10px] font-bold text-slate-500 hover:text-rose-500 uppercase flex items-center gap-1 border border-white/5 rounded w-fit"><Trash2 size={11} /> Delete</button>
+                           <button onClick={() => handleEditFlight(f)} className="p-1 px-2 text-[10px] font-bold text-[var(--theme-text-muted)] hover:text-blue-600 uppercase flex items-center gap-1 border border-[var(--theme-border)] rounded w-fit"><Pencil size={11} /> Edit</button>
+                           <button onClick={() => setDeleteConfirmId(f.id)} className="p-1 px-2 text-[10px] font-bold text-[var(--theme-text-muted)] hover:text-rose-500 uppercase flex items-center gap-1 border border-[var(--theme-border)] rounded w-fit"><Trash2 size={11} /> Delete</button>
                         </div>
                       )}
                     </td>
@@ -483,109 +487,124 @@ export function FlightsList({ isGuest }: FlightsListProps) {
           </tbody>
         </table>
 
-        {/* Mobile View */}
-        <div className="md:hidden divide-y divide-white/5">
+        <div className="md:hidden divide-y divide-[var(--theme-border)] bg-[var(--theme-card)]">
           {filteredFlights.length === 0 ? (
-            <div className="py-12 text-center text-[10px] uppercase font-mono text-slate-700 tracking-widest px-4">
+            <div className="py-12 text-center text-[10px] uppercase font-mono text-[var(--theme-text-muted)] tracking-widest px-4 bg-[var(--theme-card)] rounded-2xl border border-[var(--theme-border)] shadow-sm">
               No active requests in system
             </div>
           ) : (
-            filteredFlights.sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)).map((f) => {
-              const person = personnel.find(p => p.id === f.personnelId);
-              return (
-                <div key={f.id} className="p-4 space-y-4">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <p className="font-bold text-sm text-white uppercase tracking-tight">{person?.fullName || 'UNKNOWN'}</p>
-                      <p className="text-[10px] text-slate-500 font-mono italic">{person?.title}</p>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-[8px] font-mono text-slate-700">ID-{f.id.slice(0,6).toUpperCase()}</div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono bg-white/[0.02] p-2 rounded">
-                    <Calendar size={12} className="text-slate-700" />
-                    {f.startDate ? `${formatDate(f.startDate)} — ${formatDate(f.endDate)}` : 'DATE N/A'}
-                  </div>
-
-                  <div className="space-y-3">
-                    {f.requestedDateIDtoDZ && (
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <ArrowLeft size={10} className="text-emerald-400" />
-                            <span className="text-[9px] font-black text-emerald-400 uppercase">ID → ALG</span>
-                          </div>
-                          <span className={cn(
-                            "px-2 py-0.5 rounded text-[8px] font-black uppercase border",
-                            getStatusLabel(f.statusIDtoDZ || 'Requested', f.requestedDateIDtoDZ) === 'Need Action'
-                              ? "bg-rose-500/10 text-rose-500 border-rose-500/20"
-                              : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                          )}>
-                            {getStatusLabel(f.statusIDtoDZ || 'Requested', f.requestedDateIDtoDZ)}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-[11px] text-slate-300 font-mono">{formatDate(f.requestedDateIDtoDZ)}</span>
-                          {!isGuest && (
-                            <select 
-                              onChange={(e) => updateTransitStatus(f.id, 'IDtoDZ', e.target.value as FlightStatus)}
-                              value={f.statusIDtoDZ || 'Requested'}
-                              className="bg-black/40 border border-white/5 text-[9px] text-slate-400 px-2 py-1 rounded font-bold uppercase"
-                            >
-                              <option value="Not Requested">Not Requested</option>
-                              <option value="Requested">Requested</option>
-                              <option value="Received">Received</option>
-                            </select>
-                          )}
-                        </div>
+            <div className="grid grid-cols-1 gap-4">
+              {filteredFlights.sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)).map((f) => {
+                const person = personnel.find(p => p.id === f.personnelId);
+                return (
+                  <div key={f.id} className="bg-[var(--theme-card)] border border-[var(--theme-border)] rounded-2xl shadow-sm overflow-hidden flex flex-col group">
+                    {/* Header: Name & Group */}
+                    <div className="p-4 border-b border-[var(--theme-border)] bg-[var(--theme-status)] flex justify-between items-start">
+                      <div>
+                        <p className="font-black text-[13px] text-[var(--theme-text)] uppercase tracking-tight">{person?.fullName || 'UNKNOWN'}</p>
+                        <p className="text-[9px] text-[var(--theme-text-muted)] font-mono font-bold uppercase tracking-widest mt-0.5">{person?.rosterGroup || 'SECURE MANIFEST'}</p>
                       </div>
-                    )}
-                    
-                    {f.requestedDateDZtoID && (
-                      <div className="space-y-2 pt-2 border-t border-white/5">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <ArrowRight size={10} className="text-blue-400" />
-                            <span className="text-[9px] font-black text-blue-400 uppercase">ALG → ID</span>
-                          </div>
-                          <span className={cn(
-                            "px-2 py-0.5 rounded text-[8px] font-black uppercase border",
-                            getStatusLabel(f.statusDZtoID || 'Requested', f.requestedDateDZtoID) === 'Need Action'
-                              ? "bg-rose-500/10 text-rose-500 border-rose-500/20"
-                              : "bg-blue-500/10 text-blue-400 border-blue-500/20"
-                          )}>
-                            {getStatusLabel(f.statusDZtoID || 'Requested', f.requestedDateDZtoID)}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-[11px] text-slate-300 font-mono">{formatDate(f.requestedDateDZtoID)}</span>
-                          {!isGuest && (
-                            <select 
-                              onChange={(e) => updateTransitStatus(f.id, 'DZtoID', e.target.value as FlightStatus)}
-                              value={f.statusDZtoID || 'Requested'}
-                              className="bg-black/40 border border-white/5 text-[9px] text-slate-400 px-2 py-1 rounded font-bold uppercase"
-                            >
-                              <option value="Not Requested">Not Requested</option>
-                              <option value="Requested">Requested</option>
-                              <option value="Received">Received</option>
-                            </select>
-                          )}
-                        </div>
+                      <div className="flex gap-2">
+                        {!isGuest && (
+                          <>
+                            <button onClick={() => handleEditFlight(f)} className="p-2 bg-[var(--theme-card)] border border-[var(--theme-border)] rounded-lg text-[var(--theme-text-muted)] hover:text-blue-500 transition-colors shadow-sm"><Pencil size={12} /></button>
+                            <button onClick={() => setDeleteConfirmId(f.id)} className="p-2 bg-[var(--theme-card)] border border-[var(--theme-border)] rounded-lg text-[var(--theme-text-muted)] hover:text-rose-500 transition-colors shadow-sm"><Trash2 size={12} /></button>
+                          </>
+                        )}
                       </div>
-                    )}
-                  </div>
-
-                  {!isGuest && (
-                    <div className="flex justify-end gap-3 pt-2">
-                       <button onClick={() => handleEditFlight(f)} className="p-1 px-3 text-[10px] font-bold text-slate-500 hover:text-white uppercase flex items-center gap-1 border border-white/5 rounded bg-white/5"><Pencil size={11} /> Edit</button>
-                       <button onClick={() => setDeleteConfirmId(f.id)} className="p-1 px-3 text-[10px] font-bold text-slate-500 hover:text-rose-500 uppercase flex items-center gap-1 border border-white/5 rounded bg-white/5"><Trash2 size={11} /> Delete</button>
                     </div>
-                  )}
-                </div>
-              )
-            })
+
+                    {/* Duty Period */}
+                    <div className="px-4 py-3 bg-[var(--theme-card)] flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-[var(--theme-status)] border border-[var(--theme-border)] flex items-center justify-center">
+                        <Calendar size={12} className="text-blue-600" />
+                      </div>
+                      <div>
+                        <p className="text-[8px] text-[var(--theme-text-muted)] uppercase font-black tracking-widest leading-none mb-1">Duty Period</p>
+                        <p className="text-[10px] text-[var(--theme-text)] font-mono font-black">{f.startDate ? `${formatDate(f.startDate)} — ${formatDate(f.endDate)}` : 'DATE N/A'}</p>
+                      </div>
+                    </div>
+
+                    {/* Route Details */}
+                    <div className="p-4 pt-0 space-y-3">
+                      {f.requestedDateIDtoDZ && (
+                        <div className="p-3 bg-[var(--theme-status)] border border-[var(--theme-border)] rounded-xl space-y-2">
+                          <div className="flex justify-between items-center">
+                            <div className="flex items-center gap-2">
+                              <ArrowLeft size={10} className="text-emerald-600" />
+                              <span className="text-[8px] font-black text-[var(--theme-text-muted)] uppercase tracking-widest">JKT → ALG</span>
+                            </div>
+                            <span className={cn(
+                              "px-2 py-0.5 rounded-full text-[8px] font-black uppercase border shadow-sm",
+                              getStatusLabel(f.statusIDtoDZ || 'Requested', f.requestedDateIDtoDZ) === 'Need Action'
+                                ? "bg-rose-600 text-white border-rose-500"
+                                : f.statusIDtoDZ === 'Received'
+                                  ? "bg-emerald-600 text-white border-emerald-500"
+                                  : f.statusIDtoDZ === 'Requested'
+                                    ? "bg-blue-600 text-white border-blue-500"
+                                    : "bg-amber-500 text-white border-amber-400"
+                            )}>
+                              {getStatusLabel(f.statusIDtoDZ || 'Requested', f.requestedDateIDtoDZ)}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] text-[var(--theme-text)] font-mono font-black">{formatDate(f.requestedDateIDtoDZ)}</span>
+                            {!isGuest && (
+                              <select 
+                                onChange={(e) => updateTransitStatus(f.id, 'IDtoDZ', e.target.value as FlightStatus)}
+                                value={f.statusIDtoDZ || 'Requested'}
+                                className="bg-[var(--theme-card)] border border-[var(--theme-border)] text-[9px] text-[var(--theme-text)] px-2 py-1 rounded-lg font-black uppercase tracking-widest focus:outline-none"
+                              >
+                                <option value="Not Requested">Not Requested</option>
+                                <option value="Requested">Requested</option>
+                                <option value="Received">Received</option>
+                              </select>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {f.requestedDateDZtoID && (
+                        <div className="p-3 bg-[var(--theme-status)] border border-[var(--theme-border)] rounded-xl space-y-2">
+                          <div className="flex justify-between items-center">
+                            <div className="flex items-center gap-2">
+                              <ArrowRight size={10} className="text-blue-600" />
+                              <span className="text-[8px] font-black text-[var(--theme-text-muted)] uppercase tracking-widest">ALG → JKT</span>
+                            </div>
+                            <span className={cn(
+                              "px-2 py-0.5 rounded-full text-[8px] font-black uppercase border shadow-sm",
+                              getStatusLabel(f.statusDZtoID || 'Requested', f.requestedDateDZtoID) === 'Need Action'
+                                ? "bg-rose-600 text-white border-rose-500"
+                                : f.statusDZtoID === 'Received'
+                                  ? "bg-emerald-600 text-white border-emerald-500"
+                                  : f.statusDZtoID === 'Requested'
+                                    ? "bg-blue-600 text-white border-blue-500"
+                                    : "bg-amber-500 text-white border-amber-400"
+                            )}>
+                              {getStatusLabel(f.statusDZtoID || 'Requested', f.requestedDateDZtoID)}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] text-[var(--theme-text)] font-mono font-black">{formatDate(f.requestedDateDZtoID)}</span>
+                            {!isGuest && (
+                              <select 
+                                onChange={(e) => updateTransitStatus(f.id, 'DZtoID', e.target.value as FlightStatus)}
+                                value={f.statusDZtoID || 'Requested'}
+                                className="bg-[var(--theme-card)] border border-[var(--theme-border)] text-[9px] text-[var(--theme-text)] px-2 py-1 rounded-lg font-black uppercase tracking-widest focus:outline-none"
+                              >
+                                <option value="Not Requested">Not Requested</option>
+                                <option value="Requested">Requested</option>
+                                <option value="Received">Received</option>
+                              </select>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
       </div>
@@ -676,11 +695,11 @@ export function FlightsList({ isGuest }: FlightsListProps) {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="text-[10px] text-slate-500 uppercase font-bold px-1">Ticket: ID → DZ</label>
+                    <label className="text-[10px] text-slate-500 uppercase font-bold px-1">Ticket: INDONESIA → ALGERIA</label>
                     <input type="date" {...regRequest('requestedDateIDtoDZ')} className="w-full bg-[#16161a] border border-white/5 px-4 py-2.5 text-sm text-slate-300 rounded-lg focus:outline-none focus:border-emerald-500/30" />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] text-slate-500 uppercase font-bold px-1">Ticket: DZ → ID</label>
+                    <label className="text-[10px] text-slate-500 uppercase font-bold px-1">Ticket: ALGERIA → INDONESIA</label>
                     <input type="date" {...regRequest('requestedDateDZtoID')} className="w-full bg-[#16161a] border border-white/5 px-4 py-2.5 text-sm text-slate-300 rounded-lg focus:outline-none focus:border-blue-500/30" />
                   </div>
                 </div>

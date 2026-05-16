@@ -36,7 +36,7 @@ export function ConfirmModal({
             initial={{ opacity: 0, scale: 0.95, y: 20 }} 
             animate={{ opacity: 1, scale: 1, y: 0 }} 
             exit={{ opacity: 0, scale: 0.95, y: 20 }} 
-            className="relative w-full max-w-sm bg-[#111114] border border-white/10 rounded-2xl p-6 shadow-2xl overflow-hidden"
+            className="relative w-full max-w-sm bg-[var(--theme-card)] border border-[var(--theme-border)] rounded-2xl p-6 shadow-2xl overflow-hidden"
           >
             {/* Warning Banner */}
             <div className={`absolute top-0 left-0 right-0 h-1 ${type === 'danger' ? 'bg-rose-500' : 'bg-amber-500'}`} />
@@ -46,15 +46,15 @@ export function ConfirmModal({
                 <AlertTriangle size={20} />
               </div>
               <div className="flex-1">
-                <h3 className="text-sm font-bold text-white uppercase tracking-wider">{title}</h3>
-                <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">{message}</p>
+                <h3 className="text-sm font-bold text-[var(--theme-text)] uppercase tracking-wider">{title}</h3>
+                <p className="text-[11px] text-[var(--theme-text-muted)] mt-1 leading-relaxed">{message}</p>
               </div>
             </div>
 
             <div className="flex gap-3 mt-8">
               <button 
                 onClick={onClose}
-                className="flex-1 px-4 py-2 text-[10px] font-bold text-slate-500 hover:text-white uppercase tracking-widest border border-white/5 rounded-lg transition-all"
+                className="flex-1 px-4 py-2 text-[10px] font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] uppercase tracking-widest border border-[var(--theme-border)] rounded-lg transition-all"
               >
                 Abort
               </button>

@@ -1,6 +1,6 @@
 {
-  "name": "Phase 5 Personnel & Flight Control",
-  "description": "A specialized personnel management and flight request tracking system for Drilling Phase 5 operations, featuring automated on-duty scheduling and status monitoring.",
+  "name": "PHASE 5 DRILLING HUB",
+  "description": "Unified intelligence management system for Phase 5 Drilling Hub, focusing on personnel control and logistics ticketing.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }

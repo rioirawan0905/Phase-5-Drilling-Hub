@@ -24,6 +24,11 @@ export default function App() {
     const timer = setInterval(() => {
       setCurrentTime(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }));
     }, 1000);
+
+    // Initialize Theme
+    const savedTheme = localStorage.getItem('app-theme') || 'corporate';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+    
     return () => clearInterval(timer);
   }, []);
 
@@ -65,10 +70,10 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0a0a0c] flex items-center justify-center font-sans text-white">
+      <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center font-sans text-[#0F172A]">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-10 h-10 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
-          <p className="text-slate-500 uppercase tracking-widest text-[10px]">Initializing System...</p>
+          <div className="w-12 h-12 border-4 border-blue-100 border-t-[var(--theme-accent)] rounded-full animate-spin"></div>
+          <p className="text-slate-400 uppercase tracking-[0.2em] text-[10px] font-black">Initializing Operations...</p>
         </div>
       </div>
     );
@@ -76,28 +81,28 @@ export default function App() {
 
   if (!user && !isGuest) {
     return (
-      <div className="min-h-screen bg-[#070708] flex flex-col lg:flex-row font-sans text-white overflow-hidden selection:bg-blue-500/30">
+      <div className="min-h-screen bg-[#FFFFFF] flex flex-col lg:flex-row font-sans text-[#0F172A] overflow-hidden selection:bg-blue-100">
         {/* Left Side: Brand & Live Intel */}
-        <div className="hidden lg:flex w-1/2 relative bg-[#0a0a0c] border-r border-white/5 flex-col p-12 overflow-hidden">
-          {/* Animated Matrix Grid */}
+        <div className="hidden lg:flex w-1/2 relative bg-[#F8FAFC] border-r border-[#E2E8F0] flex-col p-12 overflow-hidden">
+          {/* Animated Grid */}
           <div 
-            className="absolute inset-0 opacity-[0.03]"
+            className="absolute inset-0 opacity-[0.05]"
             style={{ 
-              backgroundImage: `linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)`,
+              backgroundImage: `linear-gradient(#000 1px, transparent 1px), linear-gradient(90deg, #000 1px, transparent 1px)`,
               backgroundSize: '40px 40px'
             }}
           ></div>
           
           {/* Subtle Glows */}
-          <div className="absolute top-1/4 -left-20 w-96 h-96 bg-blue-600/10 blur-[120px] rounded-full"></div>
-          <div className="absolute bottom-1/4 -right-20 w-96 h-96 bg-emerald-600/5 blur-[120px] rounded-full"></div>
+          <div className="absolute top-1/4 -left-20 w-96 h-96 bg-blue-400/5 blur-[120px] rounded-full"></div>
+          <div className="absolute bottom-1/4 -right-20 w-96 h-96 bg-emerald-400/5 blur-[120px] rounded-full"></div>
 
           <div className="relative z-10 flex flex-col h-full">
             <div className="flex items-center gap-3 mb-16">
-              <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/20">
-                <Plane className="text-white" size={20} />
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-2xl shadow-blue-500/20" style={{ backgroundColor: 'var(--theme-accent)' }}>
+                <Plane className="text-white" size={24} />
               </div>
-              <span className="text-lg font-black uppercase tracking-tighter italic">Phase 5 <span className="text-blue-500">Drilling</span></span>
+              <span className="text-xl font-black uppercase tracking-tighter italic">PHASE 5 <span style={{ color: 'var(--theme-accent)' }}>DRILLING HUB</span></span>
             </div>
 
             <div className="mt-auto">
@@ -106,11 +111,11 @@ export default function App() {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.8 }}
               >
-                <h1 className="text-7xl font-black uppercase tracking-tighter leading-[0.9] mb-4">
-                  Phase 5 <br /> <span className="text-blue-600">Drilling Hub</span>
+                <h1 className="text-8xl font-extrabold uppercase tracking-tighter leading-[0.85] mb-6 text-[#0F172A]">
+                  PHASE 5 <br /> <span style={{ color: 'var(--theme-accent)' }}>DRILLING HUB</span>
                 </h1>
-                <p className="text-slate-500 text-sm max-w-md uppercase tracking-widest font-bold leading-relaxed mb-12">
-                  Unified Personnel Deployment & <br /> Flight Operations Management System
+                <p className="text-slate-400 text-base max-w-md uppercase tracking-wider font-extrabold leading-relaxed mb-12">
+                  Precision Logistics & Personnel Control <br /> Unified Intelligence Management
                 </p>
               </motion.div>
 
@@ -119,51 +124,47 @@ export default function App() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3, duration: 0.8 }}
-                className="bg-white/[0.02] border border-white/5 rounded-2xl p-6 max-w-sm backdrop-blur-md"
+                className="bg-white border border-[#E2E8F0] shadow-2xl shadow-blue-900/5 rounded-[2rem] p-8 max-w-sm"
               >
-                <div className="flex items-center justify-between mb-6">
-                   <div className="flex items-center gap-2">
-                      <Activity size={14} className="text-emerald-500" />
-                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Live Status</span>
+                <div className="flex items-center justify-between mb-8">
+                   <div className="flex items-center gap-3">
+                      <Activity size={16} className="text-emerald-500" />
+                      <span className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Hub Status</span>
                    </div>
-                   <div className="flex items-center gap-2 px-2 py-1 bg-emerald-500/10 rounded-full">
-                      <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse"></div>
-                      <span className="text-[8px] text-emerald-500 font-black uppercase">System Ready</span>
+                   <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-100 rounded-full">
+                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                      <span className="text-[9px] text-emerald-600 font-black uppercase tracking-widest">Active</span>
                    </div>
                 </div>
                 
-                <div className="space-y-4">
+                <div className="space-y-6">
                   <div className="flex justify-between items-center">
-                    <span className="text-[9px] text-slate-600 font-bold uppercase">Terminal Clock</span>
-                    <span className="text-sm font-mono text-white font-black">{currentTime || '00:00:00'}</span>
+                    <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest">Main Clock</span>
+                    <span className="text-xl font-mono text-[#0F172A] font-black tracking-tighter">{currentTime || '00:00:00'}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-[9px] text-slate-600 font-bold uppercase">Network Integrity</span>
-                    <span className="text-[10px] font-mono text-blue-500 font-bold">STABLE // 9ms</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-[9px] text-slate-600 font-bold uppercase">Access Node</span>
-                    <span className="text-[10px] font-mono text-slate-400 uppercase">South Terminal-A</span>
+                    <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest">System Load</span>
+                    <span className="text-[11px] font-mono font-black" style={{ color: 'var(--theme-accent)' }}>OPTIMIZED // 0.04%</span>
                   </div>
                 </div>
               </motion.div>
             </div>
             
-            <div className="mt-16 text-[9px] text-slate-700 font-mono flex gap-8 uppercase tracking-widest">
-              <span>© 2024 Phase 5 Drilling</span>
-              <span>Encrypted Session</span>
-              <span>Proprietary Data</span>
+            <div className="mt-16 text-[10px] text-slate-300 font-bold flex gap-8 uppercase tracking-[0.2em]">
+              <span>© 2024 P5D</span>
+              <span>Encrypted</span>
+              <span>Proprietary</span>
             </div>
           </div>
         </div>
 
         {/* Right Side: Auth Form */}
-        <div className="flex-1 flex items-center justify-center p-6 lg:p-24 relative overflow-hidden">
+        <div className="flex-1 flex items-center justify-center p-6 lg:p-24 relative bg-white">
           <div className="lg:hidden absolute top-12 left-1/2 -translate-x-1/2 flex flex-col items-center gap-4">
-             <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20 mb-2">
-                <Plane className="text-white" size={24} />
+             <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center shadow-2xl shadow-blue-500/20 mb-2">
+                <Plane className="text-white" size={28} />
              </div>
-             <h1 className="text-xl font-black uppercase tracking-tighter">Phase 5 <span className="text-blue-500">Drilling</span></h1>
+             <h1 className="text-2xl font-black uppercase tracking-tighter text-[#0F172A]">Phase 5 <span className="text-lg" style={{ color: 'var(--theme-accent)' }}>Drilling</span></h1>
           </div>
 
           <motion.div 
@@ -172,69 +173,70 @@ export default function App() {
             transition={{ delay: 0.2 }}
             className="w-full max-w-sm"
           >
-            <div className="mb-12 text-center lg:text-left">
-              <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-500/10 border border-blue-500/20 rounded-full mb-4">
-                <Lock size={10} className="text-blue-400" />
-                <span className="text-[9px] text-blue-400 font-black uppercase tracking-widest">Secure Authentication</span>
+            <div className="mb-14 text-center lg:text-left">
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-blue-50 border border-blue-100 rounded-full mb-6">
+                <Lock size={12} className="text-blue-600" />
+                <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: 'var(--theme-accent)' }}>Secured Gateway</span>
               </div>
-              <h2 className="text-3xl font-black text-white uppercase tracking-tight mb-3">Welcome Back</h2>
-              <p className="text-slate-500 text-xs uppercase font-bold tracking-wider leading-relaxed">
-                Show the dashboard, personnel schedule and flight ticket requests status in one place
+              <h2 className="text-4xl font-extrabold text-[#0F172A] uppercase tracking-tighter mb-4">Command Center</h2>
+              <p className="text-slate-500 text-sm uppercase font-bold tracking-wider leading-relaxed">
+                Personnel deployment, scheduling, and logistics monitoring dashboard
               </p>
             </div>
 
             <div className="space-y-4">
               <button 
                 onClick={handleGuestEntry}
-                className="w-full h-14 bg-white/5 border border-white/10 text-slate-400 hover:text-white hover:bg-white/10 transition-all rounded-xl flex items-center justify-center gap-4 text-[10px] font-black uppercase tracking-widest"
+                className="w-full h-16 bg-white border-2 border-[#E2E8F0] text-slate-500 hover:text-[#0F172A] hover:border-slate-300 transition-all rounded-2xl flex items-center justify-center gap-4 text-[11px] font-black uppercase tracking-widest"
               >
-                <Users size={18} />
-                <span>Access as Guest</span>
+                <Users size={20} />
+                <span>Guest Protocol</span>
               </button>
 
               <button 
                 onClick={handleLogin}
                 disabled={isLoggingIn}
                 className={cn(
-                  "w-full h-14 bg-blue-600 hover:bg-blue-500 text-white font-black uppercase tracking-widest text-xs rounded-xl flex items-center justify-center gap-4 transition-all shadow-xl shadow-blue-900/20 group relative overflow-hidden",
+                  "w-full h-16 hover:brightness-110 text-white font-black uppercase tracking-widest text-[13px] rounded-2xl flex items-center justify-center gap-4 transition-all shadow-2xl shadow-blue-500/20 group relative overflow-hidden",
                   isLoggingIn && "opacity-50 cursor-not-allowed"
                 )}
+                style={{ backgroundColor: 'var(--theme-accent)' }}
               >
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-                <Globe size={18} />
-                <span>{isLoggingIn ? 'Verifying...' : 'Administrator Authentication'}</span>
-                <ChevronRight size={14} className="opacity-50" />
+                <Globe size={20} />
+                <span>{isLoggingIn ? 'Authorizing...' : 'Admin Authorization'}</span>
+                <ChevronRight size={16} className="opacity-60" />
               </button>
             </div>
 
-            <div className="mt-12 space-y-4">
-               <div className="flex items-center gap-4 text-slate-700">
-                  <div className="h-px flex-1 bg-white/[0.05]"></div>
-                  <span className="text-[9px] font-black uppercase tracking-widest">Access Requirements</span>
-                  <div className="h-px flex-1 bg-white/[0.05]"></div>
+            <div className="mt-14 space-y-6">
+               <div className="flex items-center gap-4 text-slate-200">
+                  <div className="h-[2px] flex-1 bg-slate-100"></div>
+                  <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-300">Certification</span>
+                  <div className="h-[2px] flex-1 bg-slate-100"></div>
                </div>
                
-               <div className="grid grid-cols-3 gap-3">
-                  <div className="p-3 rounded-lg bg-white/[0.01] border border-white/5 flex flex-col items-center gap-1">
-                     <Shield size={12} className="text-slate-600" />
-                     <span className="text-[7px] text-slate-500 font-bold uppercase">Encrypted</span>
+               <div className="grid grid-cols-3 gap-4">
+                  <div className="p-4 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] flex flex-col items-center gap-2">
+                     <Shield size={14} className="text-blue-600" />
+                     <span className="text-[8px] text-slate-400 font-black uppercase">AES-256</span>
                   </div>
-                  <div className="p-3 rounded-lg bg-white/[0.01] border border-white/5 flex flex-col items-center gap-1">
-                     <Clock size={12} className="text-slate-600" />
-                     <span className="text-[7px] text-slate-500 font-bold uppercase">Verified</span>
+                  <div className="p-4 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] flex flex-col items-center gap-2">
+                     <Clock size={14} className="text-blue-600" />
+                     <span className="text-[8px] text-slate-400 font-black uppercase">OAUTH-2</span>
                   </div>
-                  <div className="p-3 rounded-lg bg-white/[0.01] border border-white/5 flex flex-col items-center gap-1">
-                     <Globe size={12} className="text-slate-600" />
-                     <span className="text-[7px] text-slate-500 font-bold uppercase">Universal</span>
+                  <div className="p-4 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] flex flex-col items-center gap-2">
+                     <Globe size={14} className="text-blue-600" />
+                     <span className="text-[8px] text-slate-400 font-black uppercase">CLOUD</span>
                   </div>
                </div>
             </div>
 
-            <div className="mt-12 pt-8 border-t border-white/5 text-center lg:text-left">
-              <p className="text-[8px] text-slate-600 uppercase font-bold tracking-[0.2em] leading-relaxed">
-                Emergency logistics contact? Request bypass from terminal <br /> operations manager or contact system support.
+            <div className="mt-12 pt-8 border-t border-slate-100 text-center lg:text-left">
+              <p className="text-[9px] text-slate-400 uppercase font-black tracking-[0.1em] leading-relaxed">
+                Emergency logistics failure? Contact hub operations <br /> manager or bypass via terminal admin override.
               </p>
             </div>
+
           </motion.div>
         </div>
       </div>

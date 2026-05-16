@@ -3,7 +3,7 @@ import { collection, onSnapshot, query } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { FlightRequest, Personnel, Scheduling, HubEvent } from '../types';
 import { PieChart, Pie, Tooltip as RechartsTooltip, ResponsiveContainer, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, AreaChart, Area, LabelList } from 'recharts';
-import { Users, Plane, Activity, CheckCircle2, AlertCircle, Clock, Filter, Calendar, Briefcase, LayoutGrid, ArrowRight, ArrowLeft, Download, Info, Globe, Sun, Cloud, CloudRain, CloudSnow, CloudLightning, CloudDrizzle, CloudFog, Wind, Tag, Palmtree, Wrench, Copy, Check } from 'lucide-react';
+import { Users, Plane, Activity, CheckCircle2, AlertCircle, Clock, Filter, Calendar, Briefcase, LayoutGrid, ArrowRight, ArrowLeft, Download, Info, Globe, Sun, Cloud, CloudRain, CloudSnow, CloudLightning, CloudDrizzle, CloudFog, Wind, Tag, Palmtree, Wrench, Copy, Check, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn, formatDate } from '../lib/utils';
 import * as XLSX from 'xlsx';
@@ -24,20 +24,48 @@ const toDate = (d: any) => {
   return new Date(d);
 };
 
+// Helper for status resolution used in both stats and rendering
+const getEffectiveStatus = (status: string, requestedDate?: string | null) => {
+  if (status === 'Received') return "Received";
+  
+  let isUrgent = status === 'Need Action';
+  if (requestedDate) {
+    const flightDate = new Date(requestedDate);
+    const today = new Date();
+    const diffTime = flightDate.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    if (diffDays <= 14) isUrgent = true;
+  }
+
+  if (isUrgent) return "Need Action";
+  if (status === 'Not Requested') return "Pending";
+  return status || "Requested";
+};
+
 export function Dashboard({ isGuest }: DashboardProps) {
   const [stats, setStats] = useState({
     totalPersonnel: 0,
     onDutyPercent: 0,
     pendingFlights: 0,
     completedFlights: 0,
-    onDutyCount: 0
+    onDutyCount: 0,
+    monthlyFulfillment: 0,
+    healthCategory: 'Optimal' as 'Optimal' | 'Suboptimal' | 'Critical'
   });
+
+  const getHealthCategory = (percentage: number) => {
+    if (percentage >= 90) return 'Optimal';
+    if (percentage >= 75) return 'Suboptimal';
+    return 'Critical';
+  };
 
   const [recentFlights, setRecentFlights] = useState<FlightRequest[]>([]);
   const [events, setEvents] = useState<HubEvent[]>([]);
   const [routeData, setRouteData] = useState<any[]>([]);
   const [statusData, setStatusData] = useState<any[]>([]);
   const [allFlights, setAllFlights] = useState<FlightRequest[]>([]);
+  const [copying, setCopying] = useState<string | null>(null);
+  const [selectedAwaitingItem, setSelectedAwaitingItem] = useState<{ flight: FlightRequest, person?: Personnel } | null>(null);
   
   // Labor Stats State
   const [personnel, setPersonnel] = useState<Personnel[]>([]);
@@ -147,23 +175,6 @@ export function Dashboard({ isGuest }: DashboardProps) {
   }, []);
 
   // Helper for status resolution used in both stats and rendering
-  const getEffectiveStatus = (status: string, requestedDate?: string | null) => {
-    if (status === 'Received') return "Received";
-    
-    let isUrgent = status === 'Need Action';
-    if (requestedDate) {
-      const flightDate = new Date(requestedDate);
-      const today = new Date();
-      const diffTime = flightDate.getTime() - today.getTime();
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      if (diffDays <= 14) isUrgent = true;
-    }
-
-    if (isUrgent) return "Need Action";
-    if (status === 'Not Requested') return "Pending";
-    return status || "Requested";
-  };
-
   useEffect(() => {
     const personnelUnsub = onSnapshot(collection(db, 'personnel'), (snap) => {
       const pData = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Personnel));
@@ -230,6 +241,30 @@ export function Dashboard({ isGuest }: DashboardProps) {
         completedFlights: completedCount 
       }));
 
+      // Calculate Monthly Fulfillment and Health Category
+      const currentMonth = new Date().toISOString().substring(0, 7);
+      const currentMonthFlights = flights.filter(f => 
+        f.requestedDateDZtoID?.startsWith(currentMonth) || 
+        f.requestedDateIDtoDZ?.startsWith(currentMonth)
+      );
+      
+      let bookedCount = 0;
+      if (currentMonthFlights.length > 0) {
+        bookedCount = currentMonthFlights.filter(f => {
+          const dzidReady = !f.requestedDateDZtoID || f.statusDZtoID === 'Received';
+          const iddzReady = !f.requestedDateIDtoDZ || f.statusIDtoDZ === 'Received';
+          return dzidReady && iddzReady;
+        }).length;
+      }
+      
+      const fulfillmentPercentage = currentMonthFlights.length > 0 ? Math.round((bookedCount / currentMonthFlights.length) * 100) : 100;
+      
+      setStats(prev => ({
+        ...prev,
+        monthlyFulfillment: fulfillmentPercentage,
+        healthCategory: getHealthCategory(fulfillmentPercentage)
+      }));
+
       setRecentFlights(flights.sort((a, b) => {
         const dateA = a.createdAt?.seconds || 0;
         const dateB = b.createdAt?.seconds || 0;
@@ -279,8 +314,9 @@ export function Dashboard({ isGuest }: DashboardProps) {
 
     if (isUrgent) return "text-rose-500 bg-rose-500/10 border-rose-500/20 animate-pulse font-bold";
 
-    if (status === 'Not Requested') return "text-slate-500 bg-slate-500/5 border-white/5";
-    return "text-blue-400 bg-blue-500/5 border-blue-500/10";
+    if (status === 'Not Requested') return "text-amber-500 bg-amber-500/10 border-amber-500/20"; // Pending
+    if (status === 'Requested') return "text-blue-400 bg-blue-500/10 border-blue-500/20";
+    return "text-indigo-400 bg-indigo-500/5 border-indigo-500/10";
   };
 
   const formatPeriod = (period: string) => {
@@ -446,7 +482,7 @@ export function Dashboard({ isGuest }: DashboardProps) {
 
   const statusColorMap: Record<string, string> = {
     'Received': '#10b981',
-    'Requested': '#3b82f6',
+    'Requested': '#6366f1',
     'Need Action': '#ef4444',
     'Pending': '#64748b',
   };
@@ -521,8 +557,6 @@ export function Dashboard({ isGuest }: DashboardProps) {
     return diffDays;
   };
 
-  const [copying, setCopying] = useState<string | null>(null);
-
   const copyAsImage = async (elementId: string) => {
     const el = document.getElementById(elementId);
     if (!el) return;
@@ -536,7 +570,7 @@ export function Dashboard({ isGuest }: DashboardProps) {
       // Modern browsers (like Safari) prefer passing a promise to ClipboardItem
       // to maintain the "user gesture" context during async operations.
       const blobPromise = toBlob(el, { 
-        backgroundColor: '#0d0d0f', 
+        backgroundColor: '#FFFFFF', 
         pixelRatio: 2,
         cacheBust: true
       }).then(blob => {
@@ -551,7 +585,7 @@ export function Dashboard({ isGuest }: DashboardProps) {
       console.error('Initial copy method failed, trying fallback:', e);
       try {
         // Fallback for browsers that don't support promise-based ClipboardItem
-        const blob = await toBlob(el, { backgroundColor: '#0d0d0f', pixelRatio: 2 });
+        const blob = await toBlob(el, { backgroundColor: '#FFFFFF', pixelRatio: 2 });
         if (!blob) throw new Error('Fallback blob creation failed');
         await navigator.clipboard.write([
           new ClipboardItem({ [blob.type]: blob })
@@ -567,95 +601,124 @@ export function Dashboard({ isGuest }: DashboardProps) {
 
   return (
     <div className="space-y-6 min-h-screen pb-12">
-      {/* Ops Intelligence Bar */}
+      {/* Ops Intelligence Monitor */}
       <motion.div 
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="theme-container bg-gradient-to-r from-blue-900/10 via-slate-900/5 to-emerald-900/10 border-white/5 p-4 md:p-3 flex flex-col md:flex-row items-center justify-center gap-6 md:gap-12"
+        initial={{ opacity: 0, scale: 0.98 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="relative group overflow-hidden theme-container bg-[var(--theme-card)] p-4 sm:p-6 md:p-8 flex flex-col lg:flex-row items-center justify-between gap-6 md:gap-8 lg:gap-12 shadow-sm"
       >
-        <div className="flex items-center gap-3 shrink-0">
-          <Globe className="text-blue-500 animate-pulse-slow" size={14} />
-          <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-300">Ops Intelligence</h3>
+        <div className="flex items-center gap-4 md:gap-5 shrink-0 w-full lg:w-auto px-6 md:px-8 py-3 bg-blue-50 rounded-2xl md:rounded-[2rem] border border-blue-100 shadow-sm relative z-10 transition-transform hover:scale-105">
+          <div className="relative">
+            <Globe className="text-blue-600 animate-pulse-slow" size={20} md={24} />
+            <div className="absolute inset-0 bg-blue-500/20 blur-xl rounded-full -z-10 animate-pulse"></div>
+          </div>
+          <div className="flex flex-col">
+            <h3 className="text-[10px] md:text-[12px] font-black uppercase tracking-[0.3em] md:tracking-[0.4em]" style={{ color: 'var(--theme-accent)' }}>Hub Intelligence</h3>
+            <span className="text-[8px] md:text-[9px] font-extrabold text-slate-400 uppercase tracking-widest mt-1">Status: High Precision</span>
+          </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-center gap-6 md:gap-16 w-full md:w-auto">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-8 w-full lg:w-auto flex-1 max-w-5xl relative z-10">
           {[
             { id: 'JKT', city: 'Jakarta, ID', time: times.jakarta, weather: weather?.jakarta, color: 'emerald', timezone: 'Asia/Jakarta' },
             { id: 'ALG', city: 'Algiers, DZ', time: times.algiers, weather: weather?.algiers, color: 'blue', timezone: 'Africa/Algiers' }
           ].map(location => (
-            <div key={location.id} className="flex items-center justify-between sm:justify-start gap-4 p-3 md:p-0 bg-white/[0.03] md:bg-transparent border border-white/10 md:border-0 rounded-2xl md:rounded-none w-full sm:w-auto group">
-              <div className="flex items-center gap-3">
-                <div className={cn("w-8 h-8 rounded-xl flex items-center justify-center font-black text-[10px] border shadow-xl transition-all group-hover:scale-110", 
-                  location.id === 'JKT' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-blue-500/10 text-blue-400 border-blue-500/20"
-                )}>
-                  {location.id}
-                </div>
-                 <div>
+            <div key={location.id} className="group relative bg-[#F8FAFC] border border-slate-100 p-4 md:p-6 rounded-2xl md:rounded-[2.5rem] transition-all hover:bg-white hover:shadow-2xl hover:shadow-blue-900/5 sm:hover:-translate-y-1">
+              <div className="flex items-center justify-between gap-4 md:gap-8">
+                <div className="flex items-center gap-3 md:gap-5">
+                  <div className={cn("w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-[1.5rem] flex items-center justify-center font-black text-xs md:text-sm border shadow-2xl transition-all group-hover:scale-110 group-hover:rotate-6", 
+                    location.id === 'JKT' ? "bg-emerald-600 text-white border-emerald-400" : "bg-blue-600 text-white border-blue-400"
+                  )}>
+                    {location.id}
+                  </div>
                   <div className="flex flex-col">
-                    <p className="text-xl md:text-2xl font-mono font-black text-white tracking-wider leading-none mb-1">{location.time}</p>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] md:text-xs text-slate-300 font-black uppercase tracking-widest">{new Date().toLocaleDateString('en-GB', { timeZone: location.timezone, day: '2-digit', month: 'short', year: 'numeric' })}</span>
-                      <span className="text-[9px] md:text-[10px] text-slate-600 font-black uppercase tracking-tighter opacity-60">— {location.city.split(',')[0]}</span>
+                    <p className="text-2xl md:text-4xl font-mono font-black text-[var(--theme-text)] tracking-tighter leading-none mb-1 md:mb-3 tabular-nums drop-shadow-sm">{location.time}</p>
+                    <div className="flex items-center gap-1.5 md:gap-2.5">
+                      <span className="text-[9px] md:text-[11px] text-slate-400 font-extrabold uppercase tracking-widest">{new Date().toLocaleDateString('en-GB', { timeZone: location.timezone, day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                      <div className="w-1 h-1 rounded-full bg-slate-200"></div>
+                      <span className="text-[8px] md:text-[10px] text-slate-300 font-black uppercase tracking-tighter">{location.city.split(',')[0]}</span>
                     </div>
                   </div>
                 </div>
+                
+                {location.weather && (
+                  <div className="flex items-center gap-3 md:gap-5 pl-4 md:pl-6 border-l-2 border-slate-100">
+                    <div className="flex flex-col items-center gap-1">
+                      <div className="p-1 md:p-2 transition-transform group-hover:scale-125">
+                        {getWeatherIcon(location.weather.desc)}
+                      </div>
+                      <span className="text-xs md:text-sm font-mono font-black text-slate-900">{location.weather.temp}°C</span>
+                    </div>
+                    <div className="hidden sm:flex flex-col items-center justify-center">
+                      <span className="text-[7px] md:text-[8px] font-black text-slate-300 uppercase tracking-widest mb-1 md:mb-2">AQI</span>
+                      <div className={cn("px-2 md:px-3 py-0.5 md:py-1 rounded-lg md:rounded-xl text-[9px] md:text-[11px] font-black uppercase tracking-wider border shadow-sm", 
+                        location.weather.aqi <= 50 ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-amber-50 text-amber-600 border-amber-100")}>
+                        {location.weather.aqi || '--'}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
-              
-              {location.weather && (
-                <div className="flex items-center gap-3 pl-4 border-l border-white/10 md:border-white/5">
-                  <div className="flex items-center gap-1.5">
-                    {getWeatherIcon(location.weather.desc)}
-                    <span className="text-xs md:text-[11px] font-mono font-black text-slate-300">{location.weather.temp}°C</span>
-                  </div>
-                  <div className="flex flex-col sm:hidden lg:flex">
-                    <span className="text-[7px] font-black text-slate-600 uppercase leading-none mb-0.5">AQI</span>
-                    <span className={cn("text-[10px] md:text-[9px] font-black uppercase leading-none", getAQIInfo(location.weather.aqi).color)}>
-                      {location.weather.aqi || '--'}
-                    </span>
-                  </div>
-                </div>
-              )}
             </div>
           ))}
         </div>
       </motion.div>
 
-      {/* Metrics Row */}
-      <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+      {/* Metrics Grid */}
+      <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-4 gap-6">
         {[
-          { label: 'Personnel', val: stats.totalPersonnel, sub: `+${stats.onDutyCount} On-Site`, color: 'text-white', icon: <Users size={16} className="text-slate-400" /> },
-          { label: 'Total Hours', val: laborAnalytics.totalHours.toLocaleString(), sub: `YTD: ${laborAnalytics.ytdHours.toLocaleString()} hrs`, color: 'text-blue-400', icon: <Clock size={16} className="text-blue-500" /> },
-          { label: 'Fulfillment', val: stats.completedFlights, sub: 'Received Tickets', color: 'text-emerald-500', icon: <CheckCircle2 size={16} className="text-emerald-500" /> },
+          { label: 'Personnel Strength', val: stats.totalPersonnel, sub: `+${stats.onDutyCount} Active On-Site`, color: 'text-blue-600', icon: <Users size={24} className="text-blue-400" />, bg: 'bg-blue-50' },
+          { label: 'Labor Analytics', val: laborAnalytics.totalHours.toLocaleString(), sub: `YTD Working Hours: ${laborAnalytics.ytdHours.toLocaleString()}h`, color: 'text-indigo-600', icon: <Clock size={24} className="text-indigo-500" />, bg: 'bg-indigo-50' },
+          { label: 'Ticket Fulfillment', val: stats.completedFlights, sub: 'Fulfillment Index', color: 'text-emerald-600', icon: <CheckCircle2 size={24} className="text-emerald-500" />, bg: 'bg-emerald-50' },
           { 
-            label: 'On Duty', 
+            label: 'Duty Utilization', 
             val: `${stats.onDutyPercent}%`, 
-            sub: 'Duty Utilization', 
-            color: 'text-orange-400',
-            icon: <Activity size={16} className="text-orange-500" />,
+            sub: 'Optimized Efficiency', 
+            color: 'text-rose-600',
+            icon: <Activity size={24} className="text-rose-500" />,
+            bg: 'bg-rose-50',
             extra: (
-              <div className="group relative inline-block ml-1">
-                <Info size={12} className="text-slate-600 cursor-help" />
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-[#16161a] border border-white/10 rounded text-[9px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none shadow-2xl">
-                  Percentage of total personnel currently on-site and on active duty.
+              <div className="group/tooltip relative inline-block ml-2">
+                <Info size={14} className="text-slate-400 hover:text-blue-500 cursor-help transition-colors" />
+                <div className="absolute bottom-full right-0 mb-4 w-64 p-4 bg-[var(--theme-card)] border border-[var(--theme-border)] rounded-2xl text-[10px] text-[var(--theme-text-muted)] font-bold opacity-0 group-hover/tooltip:opacity-100 invisible group-hover/tooltip:visible transition-all z-[100] pointer-events-none shadow-2xl uppercase tracking-widest leading-relaxed">
+                  Calculated against total registered personnel capacity. Measures the efficiency of crew deployment across all operational sectors.
                 </div>
               </div>
             )
           }
         ].map((item, i) => (
           <motion.div 
-            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }}
-            key={item.label} className="theme-card p-4 md:p-7 group hover:border-white/10 transition-all"
+            initial={{ opacity: 0, y: 20 }} 
+            animate={{ opacity: 1, y: 0 }} 
+            transition={{ delay: i * 0.1 }}
+            key={item.label} 
+            className="theme-card relative group border-slate-100 hover:border-blue-100 hover:shadow-2xl hover:shadow-blue-900/5 shadow-sm"
           >
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                {item.icon}
-                <p className="text-[10px] md:text-[11px] text-slate-500 uppercase tracking-widest truncate font-bold">{item.label}</p>
-              </div>
-              {item.extra}
+            <div className="absolute top-0 right-0 p-6 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none overflow-hidden rounded-[2rem] w-full h-full">
+              <div className={cn("w-16 h-16 rounded-full blur-3xl absolute -top-4 -right-4", item.color === 'text-blue-600' ? "bg-blue-600/10" : "bg-emerald-600/10")}></div>
             </div>
-            <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 md:gap-3">
-              <span className={cn("text-xl md:text-3xl font-light", item.color)}>{item.val}</span>
-              <span className="text-[9px] md:text-[11px] text-slate-500 leading-none truncate">{item.sub}</span>
+            
+            <div className="flex items-center justify-between mb-8">
+              <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center transition-all group-hover:rotate-12 group-hover:scale-110 shadow-sm", 
+                item.color === 'text-blue-600' ? "bg-[var(--theme-accent)]/10 text-[var(--theme-accent)]" : 
+                item.color === 'text-emerald-600' ? "bg-emerald-500/10 text-emerald-500" :
+                item.color === 'text-rose-600' ? "bg-rose-500/10 text-rose-500" :
+                "bg-[var(--theme-status)]"
+              )}>
+                {item.icon}
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400 mb-1.5">{item.label}</p>
+                <div className="flex items-center justify-end">
+                  <span className={cn("text-3xl font-black tracking-tighter tabular-nums", item.color)}>{item.val}</span>
+                  {item.extra}
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-3 pt-6 border-t border-slate-50">
+              <div className={cn("w-2 h-2 rounded-full animate-pulse", item.color === 'text-blue-600' ? "bg-blue-600" : "bg-emerald-500")}></div>
+              <span className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">{item.sub}</span>
             </div>
           </motion.div>
         ))}
@@ -668,19 +731,19 @@ export function Dashboard({ isGuest }: DashboardProps) {
         className="space-y-4"
       >
         <div className="flex items-center justify-between px-2">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500 border border-emerald-500/20">
-              <Globe size={16} />
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl flex items-center justify-center border shadow-sm transition-transform hover:rotate-6" style={{ backgroundColor: 'var(--theme-status)', borderColor: 'var(--theme-border)', color: 'var(--theme-accent)' }}>
+              <Globe size={24} />
             </div>
             <div>
-              <h2 className="text-[14px] font-black text-white uppercase tracking-[0.2em]">Deployment Intelligence</h2>
-              <p className="text-[10px] text-slate-500 uppercase font-bold">Real-time asset & personnel tracking across MLN & Hassi Messaoud</p>
+              <h2 className="text-[14px] font-black text-[var(--theme-text)] uppercase tracking-[0.2em]">Live Tactical Deployment</h2>
+              <p className="text-[10px] text-[var(--theme-text-muted)] uppercase font-bold tracking-widest">Real-time personnel telemetry across MLN & Hassi Messaoud</p>
             </div>
           </div>
-          <div className="flex items-center gap-4 bg-black/40 border border-white/5 rounded-full px-4 py-1.5">
+          <div className="flex items-center gap-5 bg-[var(--theme-card)] border border-[var(--theme-border)] rounded-full px-6 py-2 shadow-sm">
              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_5px_rgba(16,185,129,0.8)]"></div>
-                <span className="text-[9px] font-black text-slate-400 uppercase">Live Sensor Mesh</span>
+                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.3)]"></div>
+                <span className="text-[9px] font-black text-[var(--theme-text-muted)] uppercase tracking-widest">Secure Mesh Active</span>
              </div>
           </div>
         </div>
@@ -711,45 +774,52 @@ export function Dashboard({ isGuest }: DashboardProps) {
         {/* Sidebar: Events */}
         <div className="lg:col-span-1 flex flex-col gap-4">
           {/* Compact Hub Events */}
-          <div className="theme-container p-4 bg-emerald-900/5 border-emerald-500/10 flex-1 flex flex-col min-h-[300px]">
-          <div className="flex items-center justify-between mb-4 shrink-0">
-               <div className="flex items-center gap-2">
-                 <Tag className="text-emerald-500" size={14} />
-                 <h3 className="text-[11px] font-black uppercase tracking-widest text-white">Hub Events</h3>
+          <div className="theme-container p-6 bg-[var(--theme-card)] border-[var(--theme-border)] flex-1 flex flex-col min-h-[350px] shadow-sm">
+          <div className="flex items-center justify-between mb-6 shrink-0">
+               <div className="flex items-center gap-3">
+                 <div className="p-2 bg-[var(--theme-status)] rounded-lg">
+                    <Tag className="text-emerald-600" size={16} />
+                 </div>
+                 <h3 className="text-[12px] font-black uppercase tracking-widest text-[var(--theme-text)]">Hub Events</h3>
                </div>
-               <span className="text-[9px] font-mono text-emerald-500/50 uppercase">Active</span>
+               <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-emerald-50 text-emerald-600 uppercase border border-emerald-100"> ON DUTY</span>
           </div>
             
-          <div className="flex-1 space-y-3 overflow-y-auto custom-scrollbar pr-1 max-h-[250px]">
+          <div className="flex-1 space-y-4 overflow-y-auto custom-scrollbar pr-1 max-h-[300px]">
               {upcomingEvents.length > 0 ? (
                 upcomingEvents.map(ev => (
-                  <div key={ev.id} className="p-2.5 rounded-lg bg-black/40 border border-white/5 group hover:border-emerald-500/30 transition-all">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <div className="flex items-center gap-2 min-w-0">
-                        {getEventIcon(ev.type, 10)}
-                        <span className="text-[10px] font-bold text-slate-200 uppercase truncate" title={ev.title}>{ev.title}</span>
+                  <div key={ev.id} className="p-4 rounded-2xl bg-[var(--theme-status)] border border-[var(--theme-border)] group hover:border-emerald-200 hover:bg-[var(--theme-card)] hover:shadow-lg hover:shadow-emerald-900/5 transition-all">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="p-1.5 bg-white rounded-lg shadow-sm border border-slate-50">
+                          {getEventIcon(ev.type, 12)}
+                        </div>
+                        <span className="text-[11px] font-black text-slate-800 uppercase truncate" title={ev.title}>{ev.title}</span>
                       </div>
-                      <span className="text-[8px] font-mono text-slate-500 uppercase bg-white/5 px-1.5 rounded shrink-0">{ev.type}</span>
+                      <span className="text-[9px] font-mono font-bold text-[var(--theme-text-muted)] uppercase bg-[var(--theme-card)] px-2 py-0.5 rounded-lg border border-[var(--theme-border)] shrink-0 shadow-sm">{ev.type}</span>
                     </div>
-                    <div className="flex flex-col gap-1">
-                      <div className="flex items-center gap-1.5 text-slate-500">
-                        <Globe size={10} className="text-slate-600" />
-                        <span className="text-[9px] font-bold uppercase tracking-tight">{ev.location || 'MLN'}</span>
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center gap-2 text-slate-500">
+                        <Globe size={11} className="text-slate-400" />
+                        <span className="text-[10px] font-black uppercase tracking-tight text-slate-400">{ev.location || 'MLN'}</span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <p className="text-[9px] text-slate-400 font-mono italic">
+                        <p className="text-[10px] text-slate-400 font-mono font-bold italic">
                           {ev.startDate === ev.endDate ? formatDate(ev.startDate) : `${formatDate(ev.startDate)} - ${formatDate(ev.endDate)}`}
                         </p>
                         {getDaysUntil(ev.startDate) <= 0 && getDaysUntil(ev.endDate) >= 0 && (
-                          <span className="text-[8px] font-black text-emerald-500 animate-pulse uppercase">Active</span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                            <span className="text-[9px] font-black text-emerald-600 uppercase">Current</span>
+                          </div>
                         )}
                       </div>
                     </div>
                   </div>
                 ))
               ) : (
-                <div className="py-4 text-center opacity-20">
-                  <p className="text-[8px] font-bold uppercase tracking-widest">No Events</p>
+                <div className="py-10 text-center opacity-40">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-300">No events scheduled</p>
                 </div>
               )}
               
@@ -774,24 +844,25 @@ export function Dashboard({ isGuest }: DashboardProps) {
             </div>
           </div>
         </div>
-
         {/* Fleet Matrix & Analytics Pulse */}
         <div className="lg:col-span-3 flex flex-col gap-6">
-          <div className="theme-container overflow-hidden p-0 flex flex-col xl:flex-row bg-[#0d0d0f] min-h-[320px]">
+          <div className="theme-container overflow-hidden p-0 flex flex-col xl:flex-row bg-white min-h-[350px] shadow-sm">
             {/* Left: Rotation Matrix (Compact Width) */}
-            <div className="w-full xl:w-[40%] p-5 border-b xl:border-b-0 xl:border-r border-white/5 bg-white/[0.01] flex flex-col">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <LayoutGrid className="text-emerald-500" size={14} />
-                  <h3 className="text-[10px] font-black uppercase tracking-widest text-white">Rotation Status</h3>
+            <div className="w-full xl:w-[40%] p-6 border-b xl:border-b-0 xl:border-r border-slate-100 bg-slate-50/30 flex flex-col">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--theme-status)' }}>
+                    <LayoutGrid style={{ color: 'var(--theme-accent)' }} size={16} />
+                  </div>
+                  <h3 className="text-[11px] font-black uppercase tracking-widest text-[var(--theme-text)]">Rotation Matrix</h3>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_4px_rgba(16,185,129,0.5)]"></div>
-                  <span className="text-[8px] text-slate-500 font-bold uppercase tracking-tighter">Live deployment</span>
+                <div className="flex items-center gap-2 px-3 py-1 bg-white border border-slate-100 shadow-sm rounded-full">
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.3)]"></div>
+                  <span className="text-[9px] text-slate-400 font-black uppercase tracking-tighter">Live deployment</span>
                 </div>
               </div>
               
-              <div className="grid grid-cols-2 gap-2 flex-1">
+              <div className="grid grid-cols-2 gap-3 flex-1">
                 {uniqueGroups.filter(g => g && g !== 'ALL').map(group => {
                   const members = personnel.filter(p => p.rosterGroup === group);
                   const today = new Date().toISOString().split('T')[0];
@@ -804,25 +875,32 @@ export function Dashboard({ isGuest }: DashboardProps) {
                   const inTransit = groupSchedules.filter(s => s.status === 'TRANSIT').length;
                   
                   const status = onDuty > 0 ? 'ON_DUTY' : inTransit > 0 ? 'IN_TRANSIT' : 'OFF_DUTY';
-                  const colorClass = status === 'ON_DUTY' ? 'emerald' : status === 'IN_TRANSIT' ? 'amber' : 'blue';
+                  const colorClass = status === 'ON_DUTY' ? 'emerald' : status === 'IN_TRANSIT' ? 'blue' : 'slate';
 
                   return (
-                    <div key={group} className={cn("p-2.5 rounded border border-white/5 transition-all hover:bg-white/[0.02]", `bg-${colorClass}-500/5`)}>
-                <div className="flex justify-between items-center mb-1.5">
-                        <span className="text-[13px] font-black text-white">{group.startsWith('Group') ? group : `Group ${group}`}</span>
-                        <span className={cn("text-[9px] font-black uppercase", `text-${colorClass}-400`)}>
-                          {status.replace('_', ' ')}
-                        </span>
+                    <div key={group} className={cn("p-4 rounded-2xl border transition-all hover:shadow-xl hover:shadow-slate-200/50 hover:bg-white cursor-pointer group", 
+                      status === 'ON_DUTY' ? "bg-emerald-50 border-emerald-100" : status === 'IN_TRANSIT' ? "bg-blue-50 border-blue-100" : "bg-slate-50 border-slate-100"
+                    )}>
+                      <div className="flex justify-between items-center mb-3">
+                        <span className="text-[13px] font-black text-[#0F172A] group-hover:text-blue-600 transition-colors">{group.startsWith('Group') ? group : `Group ${group}`}</span>
+                        <div className={cn("w-2 h-2 rounded-full", 
+                          status === 'ON_DUTY' ? "bg-emerald-500" : status === 'IN_TRANSIT' ? "bg-blue-500" : "bg-slate-300"
+                        )}></div>
                       </div>
                       <div className="flex items-center justify-between">
-                        <div className="flex -space-x-1.5">
+                        <div className="flex -space-x-2">
                           {members.slice(0, 3).map((p, i) => (
-                            <div key={p.id} className="w-6 h-6 rounded-full border border-[#0d0d0f] bg-slate-800 flex items-center justify-center text-[9px] text-white font-bold uppercase">
+                            <div key={p.id} className="w-8 h-8 rounded-full border-2 border-white bg-slate-100 flex items-center justify-center text-[10px] text-slate-800 font-black uppercase ring-2 ring-slate-50/50">
                               {p.fullName.charAt(0)}
                             </div>
                           ))}
+                          {members.length > 3 && (
+                            <div className="w-8 h-8 rounded-full border-2 border-white bg-blue-600 flex items-center justify-center text-[10px] text-white font-black uppercase ring-2 ring-slate-50/50">
+                              +{members.length - 3}
+                            </div>
+                          )}
                         </div>
-                        <span className="text-[11px] font-mono text-slate-500">{members.length} PX</span>
+                        <span className="text-[11px] font-mono font-black text-slate-400">{members.length} PAX</span>
                       </div>
                     </div>
                   );
@@ -831,25 +909,27 @@ export function Dashboard({ isGuest }: DashboardProps) {
             </div>
 
             {/* Right: Pulse Analytics */}
-            <div className="flex-1 p-5 flex flex-col">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-2">
-                  <Plane className="text-blue-500" size={14} />
-                  <h3 className="text-[10px] font-black uppercase tracking-widest text-white">Logistics Pulse</h3>
+            <div className="flex-1 p-6 flex flex-col bg-[var(--theme-card)]">
+              <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--theme-status)' }}>
+                    <Plane style={{ color: 'var(--theme-accent)' }} size={16} />
+                  </div>
+                  <h3 className="text-[11px] font-black uppercase tracking-widest text-[var(--theme-text)]">Logistics Pulse</h3>
                 </div>
-                <div className="flex gap-3">
-                   <div className="flex items-center gap-1.5">
-                      <div className="w-2 h-2 rounded-sm bg-blue-500/40"></div>
-                      <span className="text-[8px] text-slate-500 font-bold uppercase">DZ-ID</span>
+                <div className="flex gap-4">
+                   <div className="flex items-center gap-2">
+                      <div className="w-3 h-1.5 rounded-full bg-blue-600 shadow-sm"></div>
+                      <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-tight">Algeria → Indo</span>
                    </div>
-                   <div className="flex items-center gap-1.5">
-                      <div className="w-2 h-2 rounded-sm bg-emerald-500/40"></div>
-                      <span className="text-[8px] text-slate-500 font-bold uppercase">ID-DZ</span>
+                   <div className="flex items-center gap-2">
+                      <div className="w-3 h-1.5 rounded-full bg-emerald-600 shadow-sm"></div>
+                      <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-tight">Indo → Algeria</span>
                    </div>
                 </div>
               </div>
 
-              <div className="flex-1 min-h-[140px] mb-4">
+              <div className="flex-1 min-h-[160px] mb-6">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={[...availableMonths].sort().map(m => ({
                     month: formatPeriod(m),
@@ -858,115 +938,143 @@ export function Dashboard({ isGuest }: DashboardProps) {
                   })).slice(0, 12)}>
                     <defs>
                       <linearGradient id="colorDz" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                        <stop offset="5%" stopColor="#2563EB" stopOpacity={0.15}/>
+                        <stop offset="95%" stopColor="#2563EB" stopOpacity={0}/>
                       </linearGradient>
                       <linearGradient id="colorId" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                        <stop offset="5%" stopColor="#10B981" stopOpacity={0.15}/>
+                        <stop offset="95%" stopColor="#10B981" stopOpacity={0}/>
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.02)" vertical={false} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
                     <XAxis 
                       dataKey="month" 
-                      stroke="rgba(255,255,255,0.2)" 
-                      fontSize={7} 
+                      stroke="#94A3B8" 
+                      fontSize={9} 
+                      fontWeight={900}
                       tickLine={false} 
                       axisLine={false}
                       interval={0}
+                      dy={10}
                     />
                     <YAxis hide />
                     <RechartsTooltip 
-                      contentStyle={{ backgroundColor: '#111', border: 'none', borderRadius: '4px', fontSize: '9px' }}
+                      contentStyle={{ backgroundColor: '#fff', border: '1px solid #F1F5F9', borderRadius: '12px', fontSize: '11px', fontWeight: 900, boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)' }}
+                      itemStyle={{ color: '#0F172A' }}
                     />
-                    <Area type="monotone" dataKey="dz_id" stroke="#3b82f6" fillOpacity={1} fill="url(#colorDz)" strokeWidth={2} />
-                    <Area type="monotone" dataKey="id_dz" stroke="#10b981" fillOpacity={1} fill="url(#colorId)" strokeWidth={2} />
+                    <Area type="monotone" dataKey="dz_id" stroke="#2563EB" fillOpacity={1} fill="url(#colorDz)" strokeWidth={3} dot={{ r: 4, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 6, strokeWidth: 0 }} />
+                    <Area type="monotone" dataKey="id_dz" stroke="#10B981" fillOpacity={1} fill="url(#colorId)" strokeWidth={3} dot={{ r: 4, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 6, strokeWidth: 0 }} />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
 
-              <div className="grid grid-cols-2 gap-6 pt-4 border-t border-white/5">
-                <div>
-                  <p className="text-[8px] text-slate-500 font-black uppercase mb-1 tracking-widest">Yearly Volume</p>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-xl font-mono text-white font-black">
+              <div className="grid grid-cols-2 gap-8 pt-6 border-t border-slate-100">
+                <div className="p-4 bg-[var(--theme-status)] rounded-2xl border border-[var(--theme-border)] shadow-sm transition-transform hover:scale-105">
+                  <p className="text-[10px] text-[var(--theme-text-muted)] font-extrabold uppercase mb-2 tracking-widest">Yearly Volume</p>
+                  <div className="flex items-baseline gap-3">
+                    <span className="text-3xl font-mono text-[var(--theme-text)] font-black tabular-nums tracking-tighter">
                       {allFlights.filter(f => {
                          const yr = new Date().getFullYear().toString();
                          return f.requestedDateDZtoID?.startsWith(yr) || f.requestedDateIDtoDZ?.startsWith(yr);
                       }).length}
                     </span>
-                    <span className="text-[9px] text-emerald-500 font-bold tracking-widest">MOVEMENTS</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest uppercase" style={{ color: 'var(--theme-accent)' }}>Flights</span>
                   </div>
                 </div>
-                <div className="border-l border-white/5 pl-6">
-                  <p className="text-[8px] text-slate-500 font-black uppercase mb-1 tracking-widest">Pipeline Health</p>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-xl font-mono text-white font-black">
-                      {(() => {
-                        const currentMonth = new Date().toISOString().substring(0, 7);
-                        const currentFlights = allFlights.filter(f => 
-                          f.requestedDateDZtoID?.startsWith(currentMonth) || 
-                          f.requestedDateIDtoDZ?.startsWith(currentMonth)
-                        );
-                        if (currentFlights.length === 0) return "100%";
-                        const booked = currentFlights.filter(f => {
-                          const dzidReady = !f.requestedDateDZtoID || f.statusDZtoID === 'Received';
-                          const iddzReady = !f.requestedDateIDtoDZ || f.statusIDtoDZ === 'Received';
-                          return dzidReady && iddzReady;
-                        }).length;
-                        return `${Math.round((booked / currentFlights.length) * 100)}%`;
-                      })()}
+                <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100 shadow-sm transition-transform hover:scale-105 group/card relative">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-[10px] text-blue-400 font-extrabold uppercase tracking-widest">Pipeline Health</p>
+                    <div className="group/tooltip relative">
+                      <Info size={12} className="text-blue-300 cursor-help" />
+                      <div className="absolute right-0 bottom-full mb-2 w-64 bg-[var(--theme-card)] border border-[var(--theme-border)] p-4 rounded-3xl shadow-2xl opacity-0 group-hover/tooltip:opacity-100 invisible group-hover/tooltip:visible transition-all z-50 pointer-events-none">
+                        <p className="text-[10px] font-black text-[var(--theme-text)] uppercase mb-4 border-b border-[var(--theme-border)] pb-2">Pipeline System Integrity</p>
+                        <p className="text-[9px] text-[var(--theme-text-muted)] font-bold uppercase leading-relaxed mb-4">
+                          Pipeline Health evaluates logistics efficiency by mapping booking fulfillment rates against requested operational dates.
+                        </p>
+                        <div className="space-y-3 text-[9px]">
+                          <div className="flex items-center gap-3">
+                            <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]" />
+                            <span className="text-[var(--theme-text-muted)]"><span className="text-emerald-700 font-black">OPTIMAL:</span> &gt; 90% fulfillment, &lt; 24h lag</span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <div className="w-2 h-2 rounded-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.4)]" />
+                            <span className="text-[var(--theme-text-muted)]"><span className="text-amber-700 font-black">SUBOPTIMAL:</span> 75-90% fulfillment, 24-48h lag</span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <div className="w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.4)]" />
+                            <span className="text-[var(--theme-text-muted)]"><span className="text-rose-700 font-black">CRITICAL:</span> &lt; 75% fulfillment, &gt; 48h lag</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-baseline gap-3">
+                    <span className={cn(
+                      "text-3xl font-mono font-black tabular-nums tracking-tighter",
+                      stats.healthCategory === 'Optimal' ? "text-blue-700" : 
+                      stats.healthCategory === 'Suboptimal' ? "text-amber-700" : "text-rose-700"
+                    )}>
+                      {stats.monthlyFulfillment}%
                     </span>
-                    <span className="text-[9px] text-blue-500 font-bold uppercase tracking-widest">READY</span>
+                    <span className={cn(
+                      "text-[10px] font-black uppercase tracking-widest",
+                      stats.healthCategory === 'Optimal' ? "text-blue-500" : 
+                      stats.healthCategory === 'Suboptimal' ? "text-amber-500" : "text-rose-500"
+                    )}>
+                      {stats.healthCategory}
+                    </span>
                   </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
+
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* --- LABOR ANALYTICS SECTION --- */}
-        <div className="lg:col-span-2 theme-container p-6 bg-[#0a0a0c] border border-white/5 relative overflow-hidden group">
+        <div className="lg:col-span-2 theme-container p-8 bg-white border border-slate-100 relative overflow-hidden group shadow-sm hover:shadow-2xl hover:shadow-blue-900/5 transition-all">
           {/* Subtle Background Glow */}
           <div className="absolute -top-24 -left-24 w-64 h-64 bg-blue-500/5 rounded-full blur-[100px] pointer-events-none" />
           
           <div className="relative z-10">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 mb-8">
               <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <Activity size={14} className="text-blue-500" />
-                  <h3 className="text-xs font-black text-white uppercase tracking-[0.2em]">Labor Force Profile</h3>
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="p-2 bg-[var(--theme-status)] rounded-lg">
+                    <Activity size={18} className="text-blue-600" />
+                  </div>
+                  <h3 className="text-sm font-black text-[var(--theme-text)] uppercase tracking-[0.2em]">Labor Force Profile</h3>
                 </div>
-                <p className="text-[10px] text-slate-500 uppercase font-bold">Personnel Deployment vs Cumulative Work Hours (12h/Day)</p>
+                <p className="text-[9px] md:text-[10px] text-[var(--theme-text-muted)] uppercase font-black tracking-widest">Personnel Deployment vs Cumulative Workflow (12h Benchmark)</p>
               </div>
               
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3 md:gap-4 w-full sm:w-auto">
                 {/* Group Filter */}
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-white/[0.03] border border-white/10 rounded-lg group/filter hover:bg-white/[0.05] transition-colors">
-                  <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">GROUP:</span>
+                <div className="flex items-center gap-3 px-4 py-2 bg-[var(--theme-status)] border border-[var(--theme-border)] rounded-xl group/filter hover:bg-[var(--theme-card)] hover:shadow-lg transition-all shadow-sm flex-1 sm:flex-none">
+                  <span className="text-[9px] md:text-[10px] font-black text-[var(--theme-text-muted)] uppercase tracking-widest">Filter:</span>
                   <select 
                     value={selectedGroup} 
                     onChange={(e) => setSelectedGroup(e.target.value)}
-                    className="bg-transparent text-[10px] font-black text-white focus:outline-none uppercase cursor-pointer"
+                    className="bg-transparent text-[10px] md:text-[11px] font-black text-[var(--theme-text)] focus:outline-none uppercase cursor-pointer w-full"
                   >
-                    <option value="ALL">ALL</option>
-                    {uniqueGroups.map(g => <option key={g} value={g} className="bg-[#111]">{g}</option>)}
+                    <option value="ALL">All Groups</option>
+                    {uniqueGroups.map(g => <option key={g} value={g} className="bg-white">{g}</option>)}
                   </select>
                 </div>
 
                 {/* Period Selector */}
-                <div className="relative">
+                <div className="relative flex-1 sm:flex-none">
                   <button 
                     onClick={() => setIsPeriodMenuOpen(!isPeriodMenuOpen)}
                     className={cn(
-                      "flex items-center gap-2 px-3 py-1.5 bg-white/[0.03] border border-white/10 rounded-lg hover:bg-white/[0.05] transition-all",
-                      isPeriodMenuOpen && "border-blue-500/50 bg-blue-500/5"
+                      "flex items-center gap-3 px-4 py-2 bg-slate-50 border border-slate-100 rounded-xl shadow-sm hover:bg-white hover:shadow-lg transition-all w-full",
+                      isPeriodMenuOpen && "ring-2 ring-blue-500/20 bg-white"
                     )}
                   >
-                    <Calendar size={12} className={cn("transition-colors", isPeriodMenuOpen ? "text-blue-400" : "text-slate-400")} />
-                    <span className="text-[10px] font-black text-white uppercase tracking-widest min-w-[60px] text-left">
+                    <Calendar size={14} className={cn("transition-colors", isPeriodMenuOpen ? "text-blue-600" : "text-slate-400")} />
+                    <span className="text-[10px] md:text-[11px] font-black text-[#0F172A] uppercase tracking-widest min-w-[70px] text-left">
                       {selectedPeriods.length === 0 ? 'LIFETIME' : 
                        selectedPeriods.length === 1 ? formatPeriod(selectedPeriods[0]) :
                        `${selectedPeriods.length} MONTHS`}
@@ -981,28 +1089,23 @@ export function Dashboard({ isGuest }: DashboardProps) {
                         onClick={() => setIsPeriodMenuOpen(false)} 
                       />
                       
-                      <div className="absolute top-full right-0 mt-2 w-52 bg-[#0d0d0f] border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in duration-200">
-                        <div className="p-2 border-b border-white/5 bg-white/[0.02]">
-                          <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest px-2">Select Active Periods</p>
+                      <div className="absolute top-full right-0 mt-3 w-64 bg-white border border-slate-100 rounded-[1.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.1)] z-50 overflow-hidden animate-in fade-in zoom-in duration-300">
+                        <div className="p-4 border-b border-slate-50 bg-slate-50/50">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Temporal Selection</p>
                         </div>
-                        <div className="max-h-60 overflow-y-auto custom-scrollbar">
+                        <div className="max-h-72 overflow-y-auto custom-scrollbar p-1">
                           <div 
                             onClick={() => {
                               setSelectedPeriods([]);
                               setIsPeriodMenuOpen(false); // Close on lifetime selection as it's a "reset"
                             }}
                             className={cn(
-                              "px-4 py-2 text-[10px] font-bold uppercase cursor-pointer transition-colors hover:bg-white/5 flex items-center gap-3",
-                              selectedPeriods.length === 0 ? "text-blue-500 bg-blue-500/5" : "text-slate-400"
+                              "m-1 px-4 py-3 text-[11px] font-black uppercase cursor-pointer rounded-xl transition-all hover:bg-blue-50 flex items-center justify-between",
+                              selectedPeriods.length === 0 ? "text-blue-600 bg-blue-50" : "text-slate-400"
                             )}
                           >
-                            <div className={cn(
-                              "w-3 h-3 rounded border flex items-center justify-center transition-colors",
-                              selectedPeriods.length === 0 ? "border-blue-500 bg-blue-500" : "border-white/10"
-                            )}>
-                              {selectedPeriods.length === 0 && <CheckCircle2 size={8} className="text-white" />}
-                            </div>
-                            Reset All (Lifetime)
+                            <span>LIFETIME ANALYTICS</span>
+                            {selectedPeriods.length === 0 && <CheckCircle2 size={14} />}
                           </div>
                           {availableMonths.map(m => {
                             const isSelected = selectedPeriods.includes(m);
@@ -1011,17 +1114,12 @@ export function Dashboard({ isGuest }: DashboardProps) {
                                 key={m}
                                 onClick={() => togglePeriod(m)}
                                 className={cn(
-                                  "px-4 py-2 text-[10px] font-bold uppercase cursor-pointer flex items-center gap-3 hover:bg-white/5 transition-colors",
-                                  isSelected ? "text-blue-500 bg-blue-500/5" : "text-slate-400"
+                                  "m-1 px-4 py-3 text-[11px] font-black uppercase cursor-pointer rounded-xl transition-all flex items-center justify-between hover:bg-blue-50",
+                                  isSelected ? "text-blue-600 bg-blue-50" : "text-slate-400"
                                 )}
                               >
-                                <div className={cn(
-                                  "w-3 h-3 rounded border flex items-center justify-center transition-colors",
-                                  isSelected ? "border-blue-500 bg-blue-500" : "border-white/10"
-                                )}>
-                                  {isSelected && <CheckCircle2 size={8} className="text-white" />}
-                                </div>
-                                {formatPeriod(m)}
+                                <span>{formatPeriod(m)}</span>
+                                {isSelected && <CheckCircle2 size={14} />}
                               </div>
                             );
                           })}
@@ -1041,40 +1139,42 @@ export function Dashboard({ isGuest }: DashboardProps) {
                     margin={{ top: 20, right: 30, left: 10, bottom: 80 }}
                     barGap={0}
                   >
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" vertical={false} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
                     <XAxis 
                       dataKey="name" 
-                      stroke="rgba(255,255,255,0.4)" 
-                      fontSize={13} 
+                      stroke="#94A3B8" 
+                      fontSize={11} 
                       fontWeight="900" 
                       tickLine={false} 
                       axisLine={false} 
                       interval={0}
                       angle={-45}
                       textAnchor="end"
+                      dy={10}
                     />
                     <YAxis 
-                      stroke="rgba(255,255,255,0.3)" 
+                      stroke="#94A3B8" 
                       fontSize={10} 
-                      fontWeight="black"
+                      fontWeight="900" 
                       tickLine={false} 
                       axisLine={false}
-                      label={{ value: 'HOURS', angle: -90, position: 'insideLeft', offset: 0, fontSize: 8, fill: 'rgba(255,255,255,0.2)', fontWeight: 'bold' }}
+                      tickFormatter={(val) => `${val}h`}
                     />
                     <RechartsTooltip 
-                      cursor={{ fill: 'rgba(255,255,255,0.02)' }}
+                      cursor={{ fill: '#F8FAFC' }}
+                      contentStyle={{ backgroundColor: '#fff', border: '1px solid #F1F5F9', borderRadius: '12px', fontSize: '11px', fontWeight: 900, boxShadow: '0 10px 15px -10px rgba(0,0,0,0.1)' }}
                       content={({ active, payload }) => {
                         if (active && payload && payload.length) {
                           const data = payload[0].payload;
                           return (
-                            <div className="bg-[#000] border border-white/10 p-3 rounded-lg shadow-2xl backdrop-blur-md">
-                              <p className="text-[10px] font-black text-white uppercase mb-1">{data.name}</p>
-                              <div className="flex items-center gap-2">
-                                <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: groupColorMap[data.group] || '#3b82f6' }} />
-                                <p className="text-[9px] font-bold text-slate-400 uppercase">{data.group}</p>
+                            <div className="bg-white border border-slate-100 p-4 rounded-2xl shadow-xl">
+                              <p className="text-[10px] font-black text-[#0F172A] uppercase mb-1">{data.name}</p>
+                              <div className="flex items-center gap-2 mb-2">
+                                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: groupColorMap[data.group] || '#3b82f6' }} />
+                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{data.group}</p>
                               </div>
-                              <p className="text-[14px] font-mono font-black text-blue-500 mt-1">{data.hours.toLocaleString()} HR</p>
-                              <p className="text-[8px] text-slate-600 font-bold uppercase mt-1">Status: Verified Deployment</p>
+                              <p className="text-[16px] font-mono font-black text-blue-600">{data.hours.toLocaleString()} HR</p>
+                              <p className="text-[8px] text-slate-400 font-bold uppercase mt-1 tracking-tighter">Verified Operational Log</p>
                             </div>
                           );
                         }
@@ -1083,22 +1183,22 @@ export function Dashboard({ isGuest }: DashboardProps) {
                     />
                     <Bar 
                       dataKey="hours" 
-                      radius={[4, 4, 0, 0]} 
+                      radius={[8, 8, 0, 0]} 
                       animationDuration={1500}
                     >
                       <LabelList 
                         dataKey="hours" 
                         position="top" 
-                        fill="rgba(255,255,255,0.6)" 
+                        fill="#94A3B8" 
                         fontSize={10} 
-                        fontWeight="black"
+                        fontWeight="900"
                         formatter={(val: number) => val.toLocaleString()}
                       />
                       {laborAnalytics.chartData.map((entry, index) => (
                         <Cell 
                           key={`cell-${index}`} 
                           fill={groupColorMap[entry.group] || '#3b82f6'} 
-                          fillOpacity={0.8}
+                          fillOpacity={0.9}
                           stroke={groupColorMap[entry.group] || '#3b82f6'}
                           strokeWidth={1}
                         />
@@ -1107,28 +1207,28 @@ export function Dashboard({ isGuest }: DashboardProps) {
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="h-full flex flex-col items-center justify-center bg-white/[0.01] border border-dashed border-white/5 rounded-3xl group-hover:border-blue-500/10 transition-colors">
+                <div className="h-full flex flex-col items-center justify-center bg-slate-50 border border-dashed border-slate-200 rounded-3xl group-hover:border-blue-500/20 transition-all">
                   <div className="relative">
-                    <Activity size={64} className="text-slate-800 mb-4 animate-pulse" />
-                    <AlertCircle size={20} className="absolute -top-2 -right-2 text-rose-500/40" />
+                    <Activity size={64} className="text-slate-200 mb-4 animate-pulse" />
+                    <AlertCircle size={20} className="absolute -top-2 -right-2 text-rose-500/20" />
                   </div>
-                  <h4 className="text-[14px] font-black text-slate-500 uppercase tracking-[0.3em]">No Deployment Data</h4>
-                  <p className="text-[9px] text-slate-700 uppercase mt-2 font-bold tracking-widest">Verify personnel status and period range</p>
+                  <h4 className="text-[14px] font-black text-slate-300 uppercase tracking-[0.3em]">No Deployment Matrix</h4>
+                  <p className="text-[10px] text-slate-400 font-black uppercase mt-2 tracking-widest">Awaiting rotational synchronization</p>
                 </div>
               )}
             </div>
             
             {/* Legend / Stats overlay - Repositioned to top-right to avoid overlap */}
-            <div className="absolute top-[88px] right-6 flex flex-col gap-2 pointer-events-none z-20">
-              <div className="bg-black/90 backdrop-blur-xl border border-white/10 p-3 rounded-xl text-right flex flex-col gap-1.5 shadow-2xl">
+            <div className="absolute top-[100px] right-8 flex flex-col gap-3 pointer-events-none z-20">
+              <div className="bg-white/80 backdrop-blur-xl border border-slate-100 p-6 rounded-3xl text-right flex flex-col gap-4 shadow-[0_20px_50px_rgba(0,0,0,0.05)]">
                 <div>
-                  <p className="text-[7px] font-black text-slate-500 uppercase tracking-[0.2em] leading-none mb-1">Total Period Hours</p>
-                  <p className="text-xl font-mono font-black text-white">{laborAnalytics.totalHours.toLocaleString()}<span className="text-[10px] text-blue-500 ml-1">HRS</span></p>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Period Total</p>
+                  <p className="text-3xl font-mono font-black text-[#0F172A]">{laborAnalytics.totalHours.toLocaleString()}<span className="text-[10px] text-blue-600 ml-1">HRS</span></p>
                 </div>
-                <div className="pt-1.5 border-t border-white/5">
-                  <p className="text-[7px] font-black text-emerald-500 uppercase tracking-[0.2em] leading-none mb-1">Year to Date (YTD)</p>
-                  <p className="text-sm font-mono font-black text-emerald-400">{laborAnalytics.ytdHours.toLocaleString()}<span className="text-[8px] text-emerald-500 ml-1">HRS</span></p>
-                  <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-1.5 opacity-80">Jan 1 — May 14, 2026</p>
+                <div className="pt-4 border-t border-slate-50">
+                  <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Year-to-Date</p>
+                  <p className="text-xl font-mono font-black text-emerald-700">{laborAnalytics.ytdHours.toLocaleString()}<span className="text-[10px] text-emerald-500 ml-1">HRS</span></p>
+                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-2">{new Date().getFullYear()} Core Working Hours</p>
                 </div>
               </div>
             </div>
@@ -1136,16 +1236,20 @@ export function Dashboard({ isGuest }: DashboardProps) {
         </div>
 
         {/* Personnel Status Manifest */}
-        <div className="theme-card p-5 flex flex-col h-[578px]">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-sm font-bold text-white uppercase tracking-widest">Live Manifest</h3>
-              <p className="text-[11px] text-slate-500 uppercase mt-0.5">Real-time presence</p>
+        <div className="theme-card p-8 flex flex-col h-[650px] shadow-sm hover:shadow-2xl hover:shadow-blue-900/5 transition-all">
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-50 rounded-lg">
+                <Users size={18} className="text-blue-600" />
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-[var(--theme-text)] uppercase tracking-widest">Live Manifest</h3>
+                <p className="text-[10px] text-[var(--theme-text-muted)] font-extrabold uppercase mt-1 tracking-widest">Real-time presence</p>
+              </div>
             </div>
-            <Users size={12} className="text-blue-500" />
           </div>
           
-          <div className="space-y-1.5 overflow-y-auto custom-scrollbar pr-1 flex-1">
+          <div className="space-y-3 overflow-y-auto custom-scrollbar pr-3 flex-1">
             {personnel.map(p => {
                const now = new Date();
                now.setHours(0,0,0,0);
@@ -1169,22 +1273,7 @@ export function Dashboard({ isGuest }: DashboardProps) {
                    endDate.setHours(0,0,0,0);
                    const diff = endDate.getTime() - now.getTime();
                    const days = Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
-                   daysRemainingText = `${days}d Left`;
-                 }
-               } else {
-                 // Remaining Off Duty = Next Start of On Duty Date - Today
-                 const nextSched = schedules
-                   .filter(s => s.personnelId === p.id && s.status?.toUpperCase() === 'ON_DUTY')
-                   .map(s => ({ ...s, start: toDate(s.startDate) }))
-                   .filter(s => s.start && s.start.getTime() > now.getTime())
-                   .sort((a,b) => a.start!.getTime() - b.start!.getTime())[0];
-                 
-                 if (nextSched && nextSched.start) {
-                   const nextStart = new Date(nextSched.start);
-                   nextStart.setHours(0,0,0,0);
-                   const diff = nextStart.getTime() - now.getTime();
-                   const days = Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)));
-                   daysRemainingText = `${days}d Off`;
+                   daysRemainingText = `${days} Remaining Days`;
                  }
                }
 
@@ -1196,32 +1285,32 @@ export function Dashboard({ isGuest }: DashboardProps) {
               return 0;
             })
             .map(({ p, isOnDuty, isTransit, daysRemainingText }) => (
-              <div key={p.id} className="flex items-center justify-between p-2.5 rounded bg-white/[0.01] border border-white/5 hover:bg-white/[0.03] transition-all">
-                <div className="flex items-center gap-2.5">
+              <div key={p.id} className="flex items-center justify-between p-4 rounded-2xl bg-[var(--theme-container)] border border-[var(--theme-border)] hover:bg-[var(--theme-card)] hover:shadow-lg hover:shadow-black/5 transition-all group">
+                <div className="flex items-center gap-4">
                   <div className={cn(
-                    "w-1.5 h-1.5 rounded-full",
-                    isOnDuty ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)] animate-pulse" : isTransit ? "bg-blue-400" : "bg-slate-700"
+                    "w-2.5 h-2.5 rounded-full",
+                    isOnDuty ? "bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.5)] animate-pulse" : isTransit ? "bg-blue-400" : "bg-slate-200"
                   )} />
                   <div>
-                    <p className="text-[11px] font-bold text-slate-200 uppercase tracking-tighter truncate max-w-[120px]">{p.fullName}</p>
+                    <p className="text-[12px] font-black text-[var(--theme-text)] uppercase tracking-tighter truncate group-hover:text-blue-600 transition-colors">{p.fullName}</p>
                     {daysRemainingText && (
                       <p className={cn(
-                        "text-[8px] font-mono font-bold uppercase tracking-tighter leading-none mt-0.5",
-                        isOnDuty ? "text-emerald-500/60" : "text-slate-500"
+                        "text-[9px] font-mono font-bold uppercase tracking-widest mt-1",
+                        isOnDuty ? "text-emerald-600" : "text-[var(--theme-text-muted)]"
                       )}>
                         {daysRemainingText}
                       </p>
                     )}
                   </div>
                 </div>
-                <span className={cn(
-                  "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter border",
-                  isOnDuty ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : 
-                  isTransit ? "bg-blue-400/10 text-blue-400 border-blue-400/20" : 
-                  "bg-slate-500/10 text-slate-500 border-slate-500/20"
+                <div className={cn(
+                  "px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border",
+                  isOnDuty ? "bg-emerald-50 text-emerald-700 border-emerald-200" : 
+                  isTransit ? "bg-blue-50 text-blue-700 border-blue-200" : 
+                  "bg-[var(--theme-status)] text-[var(--theme-text-muted)] border-[var(--theme-border)]"
                 )}>
-                  {isOnDuty ? 'On Duty' : isTransit ? 'Transit' : 'Off Duty'}
-                </span>
+                  {isOnDuty ? ' ON DUTY' : isTransit ? 'TRANSIT' : 'OFF DUTY'}
+                </div>
               </div>
             ))}
           </div>
@@ -1231,65 +1320,87 @@ export function Dashboard({ isGuest }: DashboardProps) {
       {/* Logistics Intelligence Row */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Fulfillment Sync (Pie Chart) */}
-        <div className="lg:col-span-1 theme-card p-5">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-[10px] font-black text-white uppercase tracking-widest">Fulfillment Sync</h3>
-              <p className="text-[8px] text-slate-500 uppercase mt-0.5">Ticket Completion Ratio</p>
+        <div className="lg:col-span-1 theme-container p-8 shadow-sm hover:shadow-2xl hover:shadow-blue-900/5 transition-all group/fulfillment">
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-emerald-50 rounded-lg group-hover/fulfillment:rotate-12 transition-transform">
+                <CheckCircle2 size={18} className="text-emerald-600" />
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-[var(--theme-text)] uppercase tracking-[0.1em]">Fulfillment Sync</h3>
+                <p className="text-[10px] text-[var(--theme-text-muted)] font-black uppercase mt-1 tracking-widest">Efficiency Matrix</p>
+              </div>
             </div>
-            <CheckCircle2 size={12} className="text-emerald-500" />
           </div>
-          <div className="h-[140px] w-full">
+          <div className="h-[200px] w-full relative">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie 
                   data={statusData} 
                   cx="50%" 
                   cy="50%" 
-                  innerRadius={45} 
-                  outerRadius={60} 
-                  paddingAngle={5}
+                  innerRadius={65} 
+                  outerRadius={85} 
+                  paddingAngle={8}
                   dataKey="value"
+                  stroke="none"
                 >
                   {statusData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={statusColorMap[entry.name] || COLORS[index % COLORS.length]} />
+                    <Cell 
+                      key={`cell-${index}`} 
+                      fill={statusColorMap[entry.name] || COLORS[index % COLORS.length]} 
+                      className="hover:opacity-80 transition-opacity cursor-pointer"
+                    />
                   ))}
                 </Pie>
                 <RechartsTooltip 
-                  contentStyle={{ backgroundColor: '#111', border: 'none', borderRadius: '4px', fontSize: '9px' }} 
+                   contentStyle={{ backgroundColor: 'var(--theme-card)', border: '1px solid var(--theme-border)', borderRadius: '12px', fontSize: '11px', fontWeight: 900, boxShadow: 'var(--theme-shadow)' }}
+                   itemStyle={{ color: 'var(--theme-text)' }}
                 />
               </PieChart>
             </ResponsiveContainer>
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <p className="text-[10px] text-[var(--theme-text-muted)] font-black uppercase tracking-widest leading-none">Sync</p>
+                <p className="text-2xl font-mono font-black text-[var(--theme-text)] mt-1">100%</p>
+            </div>
           </div>
-          <div className="grid grid-cols-2 gap-2 mt-2">
+          <div className="grid grid-cols-2 gap-4 mt-8">
              {statusData.slice(0, 4).map((item) => (
-                <div key={item.name} className="flex flex-col p-1.5 bg-white/[0.02] border border-white/5 rounded">
-                   <span className="text-[7px] text-slate-500 uppercase tracking-widest truncate">{item.name}</span>
-                   <span className="text-[10px] text-white font-bold">{item.value}</span>
+                <div key={item.name} className="flex flex-col p-4 bg-[var(--theme-container)] border border-[var(--theme-border)] rounded-2xl group/item hover:bg-[var(--theme-card)] hover:shadow-lg transition-all">
+                   <div className="flex items-center gap-2 mb-1">
+                      <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: statusColorMap[item.name] || '#3b82f6' }} />
+                      <span className="text-[9px] text-[var(--theme-text-muted)] font-black uppercase tracking-widest truncate">{item.name}</span>
+                   </div>
+                   <span className="text-xl text-[var(--theme-text)] font-mono font-black tabular-nums">{item.value}</span>
                 </div>
              ))}
           </div>
         </div>
 
         {/* Awaiting Fulfillment (Feed) */}
-        <div id="awaiting-ops-action" className="lg:col-span-2 theme-card p-5 flex flex-col">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Clock size={12} className="text-rose-500" />
-              <h3 className="text-[10px] font-black text-white uppercase tracking-widest">Awaiting Ops Action</h3>
-            </div>
+        <div id="awaiting-ops-action" className="lg:col-span-2 theme-container p-8 flex flex-col shadow-sm hover:shadow-2xl hover:shadow-blue-900/5 transition-all group/awaiting">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 mb-8">
             <div className="flex items-center gap-3">
+              <div className="p-2 bg-rose-50 rounded-lg group-hover/awaiting:scale-110 transition-transform">
+                <Clock size={18} className="text-rose-600" />
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-[var(--theme-text)] uppercase tracking-[0.1em]">Awaiting Ops Action</h3>
+                <p className="text-[9px] md:text-[10px] text-[var(--theme-text-muted)] font-black uppercase mt-1 tracking-widest">High-Priority Queue</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
               <button 
                 onClick={() => copyAsImage('awaiting-ops-action')}
-                className="p-1 rounded bg-white/5 border border-white/5 hover:bg-white/10 transition-colors text-slate-500 hover:text-white"
-                title="Copy as Image"
+                className="p-2.5 md:p-3 rounded-xl md:rounded-2xl bg-[var(--theme-status)] border border-[var(--theme-border)] hover:bg-[var(--theme-card)] hover:shadow-xl transition-all text-[var(--theme-text-muted)] hover:text-blue-600 shadow-sm"
+                title="Copy Dispatch Matrix"
               >
-                {copying === 'awaiting-ops-action' ? <Check size={10} /> : <Copy size={10} />}
+                {copying === 'awaiting-ops-action' ? <Check size={18} /> : <Copy size={18} />}
               </button>
-              <span className="text-[8px] font-mono text-rose-500/50 uppercase">Urgent Priority</span>
+              <div className="px-3 md:px-4 py-1.5 bg-rose-50 text-rose-600 text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] rounded-full border border-rose-100">Live Queue</div>
             </div>
           </div>
-          <div className="flex-1 space-y-2 overflow-y-auto custom-scrollbar pr-1 max-h-[300px]">
+          <div className="flex-1 space-y-4 overflow-y-auto custom-scrollbar pr-3 max-h-[380px]">
              {allFlights
                .filter(f => f.statusDZtoID === 'Requested' || f.statusIDtoDZ === 'Requested')
                .sort((a, b) => {
@@ -1302,76 +1413,100 @@ export function Dashboard({ isGuest }: DashboardProps) {
                  return getEarliestReq(a) - getEarliestReq(b);
                })
                .map((f) => {
-                const person = personnel.find(p => p.id === f.personnelId);
-                return (
-                   <div key={f.id} className="p-2.5 rx-2 rounded bg-black/40 border border-white/5 flex items-center justify-between group hover:border-rose-500/20 transition-all">
-                      <div className="flex items-center gap-3">
-                         <div className="w-9 h-9 rounded bg-slate-800 flex items-center justify-center text-[12px] font-black text-white border border-white/5">
+                 const person = personnel.find(p => p.id === f.personnelId);
+                 return (
+                   <div 
+                      key={f.id} 
+                      onClick={() => setSelectedAwaitingItem({ flight: f, person })}
+                      className="p-4 md:p-5 rounded-2xl md:rounded-[2rem] bg-[#F8FAFC] border border-slate-100 flex flex-col items-start sm:flex-row sm:items-center justify-between gap-4 group hover:border-blue-200 hover:bg-white hover:shadow-xl hover:shadow-blue-900/5 transition-all cursor-pointer"
+                    >
+                      <div className="flex items-center gap-4 md:gap-5">
+                         <div className="w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-white shadow-lg border border-slate-50 flex items-center justify-center text-[14px] md:text-[18px] font-black text-blue-600 transition-transform group-hover:rotate-6">
                             {person?.fullName.charAt(0)}
                          </div>
                          <div>
-                            <p className="text-[12px] text-white font-bold uppercase leading-tight">{person?.fullName}</p>
-                            <p className="text-[9px] text-slate-600 font-mono">REQ-{f.id.slice(0,8)}</p>
+                            <p className="text-[12px] md:text-[14px] text-[#0F172A] font-black uppercase leading-tight tracking-tight">{person?.fullName}</p>
+                            <p className="text-[8px] md:text-[10px] text-slate-400 font-mono font-bold mt-1 uppercase tracking-widest">TXN-{f.id.slice(0,8).toUpperCase()}</p>
                          </div>
                       </div>
-                      <div className="flex items-center gap-6">
+                      <div className="flex flex-wrap items-center gap-4 md:gap-8 w-full sm:w-auto">
                          {f.requestedDateDZtoID && f.statusDZtoID === 'Requested' && (
-                           <div className="text-right">
-                             <p className="text-[9px] font-black text-blue-500 uppercase">Algeria → Indonesia</p>
-                             <p className="text-[11px] text-slate-200 font-mono font-bold leading-none">{formatDate(f.requestedDateDZtoID)}</p>
-                             <p className="text-[9px] text-slate-500 font-bold uppercase mt-1">
+                           <div className="text-left sm:text-right flex-1 sm:flex-none">
+                             <div className="flex items-center sm:justify-end gap-2 mb-1">
+                                <span className="block w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                                <p className="text-[8px] md:text-[10px] font-black text-blue-600 uppercase tracking-widest">ALG → JKT</p>
+                             </div>
+                             <p className="text-[11px] md:text-[13px] text-[#0F172A] font-mono font-black tabular-nums">{formatDate(f.requestedDateDZtoID)}</p>
+                             <p className="text-[8px] md:text-[10px] text-slate-400 font-extrabold uppercase mt-1 tracking-widest">
                                {getDaysUntil(f.requestedDateDZtoID) === 0 ? 'DUE TODAY' : 
-                                getDaysUntil(f.requestedDateDZtoID) < 0 ? 'PAST DUE' : 
-                                `${getDaysUntil(f.requestedDateDZtoID)}d remaining`}
+                                getDaysUntil(f.requestedDateDZtoID) < 0 ? 'OVERDUE' : 
+                                `${getDaysUntil(f.requestedDateDZtoID)}d Lead`}
                              </p>
                            </div>
                          )}
                          {f.requestedDateIDtoDZ && f.statusIDtoDZ === 'Requested' && (
-                           <div className="text-right">
-                             <p className="text-[9px] font-black text-emerald-500 uppercase">Indonesia → Algeria</p>
-                             <p className="text-[11px] text-slate-200 font-mono font-bold leading-none">{formatDate(f.requestedDateIDtoDZ)}</p>
-                             <p className="text-[9px] text-slate-500 font-bold uppercase mt-1">
+                           <div className="text-left sm:text-right flex-1 sm:flex-none">
+                             <div className="flex items-center sm:justify-end gap-2 mb-1">
+                                <span className="block w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                <p className="text-[8px] md:text-[10px] font-black text-emerald-600 uppercase tracking-widest">JKT → ALG</p>
+                             </div>
+                             <p className="text-[11px] md:text-[13px] text-[#0F172A] font-mono font-black tabular-nums">{formatDate(f.requestedDateIDtoDZ)}</p>
+                             <p className="text-[8px] md:text-[10px] text-slate-400 font-extrabold uppercase mt-1 tracking-widest">
                                {getDaysUntil(f.requestedDateIDtoDZ) === 0 ? 'DUE TODAY' : 
-                                getDaysUntil(f.requestedDateIDtoDZ) < 0 ? 'PAST DUE' : 
-                                `${getDaysUntil(f.requestedDateIDtoDZ)}d remaining`}
+                                getDaysUntil(f.requestedDateIDtoDZ) < 0 ? 'OVERDUE' : 
+                                `${getDaysUntil(f.requestedDateIDtoDZ)}d Lead`}
                              </p>
                            </div>
                          )}
-                         <ArrowRight size={12} className="text-slate-700 group-hover:text-rose-500 transition-colors" />
+                         <div className="p-1.5 md:p-2 bg-white rounded-lg md:rounded-xl shadow-sm border border-slate-50 group-hover:translate-x-1 transition-all hidden sm:block">
+                            <ArrowRight size={14} className="text-slate-300 group-hover:text-blue-600 transition-colors" />
+                         </div>
                       </div>
                    </div>
                 );
              })}
              {allFlights.filter(f => f.statusDZtoID === 'Requested' || f.statusIDtoDZ === 'Requested').length === 0 && (
-                <div className="h-full flex flex-col items-center justify-center opacity-10 py-10">
-                   <CheckCircle2 size={32} className="mb-2" />
-                   <p className="text-[10px] font-black uppercase tracking-[0.3em]">All Clear</p>
+                <div className="flex-1 flex flex-col items-center justify-center py-20 bg-slate-50/50 rounded-[3rem] border border-dashed border-slate-100">
+                   <div className="p-6 bg-white rounded-[2rem] shadow-2xl border border-slate-50 mb-6 group-hover:scale-110 transition-transform">
+                      <CheckCircle2 size={48} className="text-emerald-500" />
+                   </div>
+                   <h4 className="text-[16px] font-black text-slate-900 uppercase tracking-[0.4em]">Queue Purged</h4>
+                   <p className="text-[10px] text-slate-400 font-black uppercase mt-2 tracking-widest">All operational actions complete</p>
                 </div>
              )}
           </div>
         </div>
 
-        {/* Allocation Progress */}
-        <div className="lg:col-span-1 theme-card p-5">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-[12px] font-black text-white uppercase tracking-widest">Group Allocation</h3>
-              <p className="text-[10px] text-slate-500 uppercase mt-0.5">Distribution</p>
+        {/* Allocation Progress (Group Balance) */}
+        <div className="lg:col-span-1 theme-container p-8 bg-white border border-slate-100 shadow-sm hover:shadow-2xl hover:shadow-blue-900/5 transition-all group/allocation">
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-orange-50 rounded-lg group-hover/allocation:rotate-12 transition-transform">
+                <LayoutGrid size={18} className="text-orange-600" />
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-[#0F172A] uppercase tracking-[0.1em]">Group Balance</h3>
+                <p className="text-[10px] text-slate-400 font-black uppercase mt-1 tracking-widest">Distribution</p>
+              </div>
             </div>
-            <LayoutGrid size={12} className="text-orange-500" />
           </div>
-          <div className="space-y-3">
-             {uniqueGroups.slice(0, 5).map((g) => {
+          <div className="space-y-6">
+             {uniqueGroups.slice(0, 6).map((g) => {
                const groupPersonnel = personnel.filter(p => p.rosterGroup === g);
                const percent = stats.totalPersonnel ? Math.round((groupPersonnel.length / stats.totalPersonnel) * 100) : 0;
                return (
-                 <div key={g} className="space-y-1">
-                   <div className="flex justify-between text-[8px] font-bold uppercase">
-                     <span className="text-slate-500">{g}</span>
-                     <span className="text-slate-600">{groupPersonnel.length} PAX</span>
+                 <div key={g} className="group/item">
+                   <div className="flex justify-between items-baseline mb-2">
+                     <span className="text-[11px] font-black text-slate-800 uppercase tracking-widest group-hover/item:text-blue-600 transition-colors">{g}</span>
+                     <span className="text-[10px] font-mono font-black text-slate-400 tabular-nums">{groupPersonnel.length} PAX</span>
                    </div>
-                   <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
-                     <div className="h-full bg-blue-600 rounded-full" style={{ width: `${percent}%` }}></div>
+                   <div className="h-3 bg-slate-50 rounded-full overflow-hidden border border-slate-100 p-0.5">
+                     <motion.div 
+                        initial={{ width: 0 }}
+                        animate={{ width: `${percent}%` }}
+                        transition={{ duration: 1, ease: "easeOut" }}
+                        className="h-full bg-blue-600 rounded-full shadow-[0_0_10px_rgba(37,99,235,0.3)]" 
+                     />
                    </div>
                  </div>
                );
@@ -1381,175 +1516,215 @@ export function Dashboard({ isGuest }: DashboardProps) {
       </div>
 
       {/* Manifest Row */}
-      <div id="flight-requests-summary" className="theme-container overflow-hidden">
-        <div className="p-4 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
+      <div id="flight-requests-summary" className="theme-container bg-[var(--theme-card)] border border-[var(--theme-border)] overflow-hidden shadow-sm hover:shadow-2xl hover:shadow-blue-900/5 transition-all">
+        <div className="p-4 md:p-8 border-b border-[var(--theme-border)] flex flex-col xl:flex-row xl:items-center justify-between bg-[var(--theme-status)] gap-6">
           <div className="flex items-center gap-3">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-white">Flight Ticket Requests Summary</h2>
-            <button 
-              onClick={() => copyAsImage('flight-requests-summary')}
-              className="p-1 rounded bg-white/5 border border-white/5 hover:bg-white/10 transition-colors text-slate-500 hover:text-white"
-              title="Copy as Image"
-            >
-              {copying === 'flight-requests-summary' ? <Check size={12} /> : <Copy size={12} />}
-            </button>
+            <div className="p-2 bg-blue-50 rounded-lg">
+               <Plane size={18} className="text-blue-600" />
+            </div>
+            <div>
+               <h2 className="text-sm font-black text-[#0F172A] uppercase tracking-widest">Flight Ticket Requests Summary</h2>
+               <p className="text-[10px] text-slate-400 font-black uppercase mt-1 tracking-widest">Logistics Dispatch Audit</p>
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-4">
-             <div className="flex items-center gap-2 px-2 py-1 bg-black/40 border border-white/5 rounded-lg text-[9px]">
-                <Users size={10} className="text-slate-500" />
+          
+          <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
+             {/* Search/Filter Controls */}
+             <div className="flex items-center gap-2 px-3 md:px-4 py-2 bg-[var(--theme-card)] border border-[var(--theme-border)] rounded-xl text-[10px] shadow-sm flex-1 md:flex-none">
+                <Users size={12} className="text-[var(--theme-text-muted)]" />
                 <select 
                   value={summaryGroup} 
                   onChange={(e) => setSummaryGroup(e.target.value)}
-                  className="bg-transparent text-slate-300 focus:outline-none uppercase font-bold"
+                  className="bg-transparent text-[var(--theme-text)] focus:outline-none uppercase font-black tracking-tight w-full"
                 >
-                  <option value="ALL">Groups</option>
+                  <option value="ALL">All Groups</option>
                   {uniqueGroups.map(g => <option key={g} value={g}>{g}</option>)}
                 </select>
              </div>
-             <div className="flex items-center gap-2 px-2 py-1 bg-black/40 border border-white/5 rounded-lg text-[9px]">
-                <Users size={10} className="text-slate-500" />
+
+             <div className="flex items-center gap-2 px-3 md:px-4 py-2 bg-[var(--theme-card)] border border-[var(--theme-border)] rounded-xl text-[10px] shadow-sm flex-1 md:flex-none">
+                <Users size={12} className="text-[var(--theme-text-muted)]" />
                 <select 
                   value={summaryPersonnel} 
                   onChange={(e) => setSummaryPersonnel(e.target.value)}
-                  className="bg-transparent text-slate-300 focus:outline-none uppercase font-bold max-w-[100px]"
+                  className="bg-transparent text-[var(--theme-text)] focus:outline-none uppercase font-black tracking-tight w-full"
                 >
-                  <option value="ALL">Staff</option>
+                  <option value="ALL">All Staff</option>
                   {personnel.sort((a,b) => a.fullName.localeCompare(b.fullName)).map(p => <option key={p.id} value={p.id}>{p.fullName}</option>)}
                 </select>
              </div>
-             <div className="flex items-center gap-2 px-2 py-1 bg-black/40 border border-white/5 rounded-lg text-[9px]">
-                <Calendar size={10} className="text-slate-500" />
+
+             <div className="flex items-center gap-2 px-3 md:px-4 py-2 bg-[var(--theme-card)] border border-[var(--theme-border)] rounded-xl text-[10px] shadow-sm flex-1 md:flex-none">
+                <Calendar size={12} className="text-[var(--theme-text-muted)]" />
                 <select 
                   value={summaryMonth} 
                   onChange={(e) => setSummaryMonth(e.target.value)}
-                  className="bg-transparent text-slate-300 focus:outline-none uppercase font-bold"
+                  className="bg-transparent text-[var(--theme-text)] focus:outline-none uppercase font-black tracking-tight w-full"
                 >
-                  <option value="ALL">Month</option>
+                  <option value="ALL">All Months</option>
                   {availableMonths.map(m => <option key={m} value={m}>{formatPeriod(m)}</option>)}
                 </select>
              </div>
-             <div className="flex items-center gap-2 px-2 py-1 bg-black/40 border border-white/5 rounded-lg text-[9px]">
-                <Activity size={10} className="text-slate-500" />
+
+             <div className="flex items-center gap-2 px-3 md:px-4 py-2 bg-[var(--theme-card)] border border-[var(--theme-border)] rounded-xl text-[10px] shadow-sm flex-1 md:flex-none">
+                <Activity size={12} className="text-[var(--theme-text-muted)]" />
                 <select 
                   value={summaryStatus} 
                   onChange={(e) => setSummaryStatus(e.target.value)}
-                  className="bg-transparent text-slate-300 focus:outline-none uppercase font-bold"
+                  className="bg-transparent text-[var(--theme-text)] focus:outline-none uppercase font-black tracking-tight w-full"
                 >
-                  <option value="ALL">Status</option>
+                  <option value="ALL">All Status</option>
                   <option value="Requested">Requested</option>
                   <option value="Received">Received</option>
                   <option value="Need Action">Need Action</option>
                   <option value="Pending">Pending</option>
                 </select>
              </div>
-             <button 
-               onClick={exportToExcel}
-               className="flex items-center gap-2 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[9px] font-black uppercase transition-all shadow-lg shadow-emerald-900/20"
-             >
-               <Download size={12} />
-               Export Excel
-             </button>
-             <div className="flex items-center gap-2 hidden md:flex">
-                <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                <span className="text-[9px] text-slate-500 uppercase">Algeria - Indonesia</span>
+
+             <div className="flex items-center gap-2 md:gap-3 flex-1 md:flex-none justify-end">
+               <button 
+                 onClick={exportToExcel}
+                 className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 md:px-5 py-2.5 bg-[#0F172A] hover:bg-[#1E293B] text-white rounded-xl md:rounded-2xl text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all shadow-xl shadow-blue-900/10"
+               >
+                 <Download size={14} />
+                 <span className="hidden xs:inline">Export</span>
+               </button>
+
+               <button 
+                 onClick={() => copyAsImage('flight-requests-summary')}
+                 className="p-2.5 rounded-xl bg-[var(--theme-card)] border border-[var(--theme-border)] hover:bg-[var(--theme-status)] hover:shadow-xl transition-all text-[var(--theme-text-muted)] hover:text-blue-600 shadow-sm"
+                 title="Copy Image"
+               >
+                 {copying === 'flight-requests-summary' ? <Check size={18} /> : <Copy size={18} />}
+               </button>
              </div>
-             <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                <span className="text-[9px] text-slate-500 uppercase">Indonesia - Algeria</span>
-             </div>
-             <Plane size={14} className="text-slate-500 ml-2" />
           </div>
         </div>
-        <div className="p-0 overflow-x-auto custom-scrollbar">
+
+        <div className="p-0 overflow-x-auto custom-scrollbar bg-white">
           {/* Desktop Table */}
           <table className="hidden md:table w-full text-left border-collapse">
-            <thead className="text-[11px] text-slate-500 uppercase tracking-widest bg-black/40">
+            <thead className="text-[10px] text-slate-400 uppercase tracking-[0.2em] bg-[#F8FAFC]">
               <tr>
-                <th className="py-3 px-4 font-black border-b border-white/5">Personnel</th>
-                <th className="py-3 px-4 font-black border-b border-white/5">Duty Period</th>
-                <th className="py-3 px-4 font-black border-b border-white/5">Flight Intel</th>
-                <th className="py-3 px-4 font-black border-b border-white/5 text-center">Status</th>
-                <th className="py-3 px-4 font-black border-b border-white/5 text-right">Log ID</th>
+                <th className="py-5 px-8 font-black border-b border-slate-100">Personnel</th>
+                <th className="py-5 px-8 font-black border-b border-slate-100">Duty Period</th>
+                <th className="py-5 px-8 font-black border-b border-slate-100">Flight Ticket</th>
+                <th className="py-5 px-8 font-black border-b border-slate-100 text-center">Ticket Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody className="divide-y divide-slate-50">
               {filteredSummaryFlights.map((flight) => {
                 const person = personnel.find(p => p.id === flight.personnelId);
                 return (
-                  <tr key={flight.id} className="hover:bg-white/[0.02] group transition-colors">
-                    <td className="py-3 px-4">
-                      <p className="text-[13px] text-slate-200 font-bold uppercase tracking-tighter">{person?.fullName || 'Crew member'}</p>
-                      <p className="text-[10px] text-slate-600 font-mono italic">{person?.title || 'System ID: ' + flight.id.slice(0,4)}</p>
+                  <tr key={flight.id} className="hover:bg-slate-50 group transition-colors">
+                    <td className="py-6 px-8">
+                       <div className="flex flex-col">
+                          <span className="text-[13px] text-black font-black uppercase leading-tight tracking-tight">{person?.fullName || 'Crew member'}</span>
+                          <span className="text-[10px] text-slate-400 font-mono font-bold mt-1 uppercase tracking-widest">{person?.rosterGroup || 'LOGISTICS CORE'}</span>
+                       </div>
                     </td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-2 text-[11px] text-slate-400 font-mono whitespace-nowrap">
-                         <Calendar size={12} className="text-slate-700" />
-                         {flight.startDate ? `${formatDate(flight.startDate)} — ${formatDate(flight.endDate)}` : 'Unscheduled'}
-                      </div>
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="flex flex-col gap-1 min-w-[220px]">
-                        {flight.requestedDateIDtoDZ && (
-                          <div className="flex items-center gap-2">
-                            <ArrowLeft size={10} className="text-emerald-500" />
-                            <div className="flex items-center gap-2">
-                              <span className="text-[11px] text-slate-400 font-mono tracking-tighter">Indonesia-Algeria ({formatDate(flight.requestedDateIDtoDZ)})</span>
-                              {(flight.statusIDtoDZ === 'Requested' || flight.statusIDtoDZ === 'Not Requested' || flight.statusIDtoDZ === 'Need Action') && (
-                                <span className="text-[9px] text-slate-500 font-bold uppercase whitespace-nowrap">
-                                  {getDaysUntil(flight.requestedDateIDtoDZ) === 0 ? 'TODAY' : 
-                                   getDaysUntil(flight.requestedDateIDtoDZ) < 0 ? 'OVERDUE' : 
-                                   `${getDaysUntil(flight.requestedDateIDtoDZ)}d rem`}
-                                </span>
-                              )}
-                            </div>
+                    <td className="py-6 px-8">
+                       <div className="flex items-center gap-3">
+                          <div className="p-2 bg-slate-50 border border-slate-100 rounded-lg">
+                             <Calendar size={14} className="text-slate-400" />
                           </div>
-                        )}
-                        {flight.requestedDateDZtoID && (
-                          <div className="flex items-center gap-2">
-                            <ArrowRight size={10} className="text-blue-500" />
-                            <div className="flex items-center gap-2">
-                              <span className="text-[11px] text-slate-400 font-mono tracking-tighter">Algeria-Indonesia ({formatDate(flight.requestedDateDZtoID)})</span>
-                              {(flight.statusDZtoID === 'Requested' || flight.statusDZtoID === 'Not Requested' || flight.statusDZtoID === 'Need Action') && (
-                                <span className="text-[9px] text-slate-500 font-bold uppercase whitespace-nowrap">
-                                  {getDaysUntil(flight.requestedDateDZtoID) === 0 ? 'TODAY' : 
-                                   getDaysUntil(flight.requestedDateDZtoID) < 0 ? 'OVERDUE' : 
-                                   `${getDaysUntil(flight.requestedDateDZtoID)}d rem`}
-                                </span>
-                              )}
-                            </div>
+                          <div className="flex flex-col">
+                             <span className="text-[11px] text-[#0F172A] font-mono font-black tabular-nums">
+                                {flight.startDate ? `${formatDate(flight.startDate)}` : 'N/A'}
+                             </span>
+                             <span className="text-[11px] text-slate-400 font-mono font-black tabular-nums">
+                                {flight.endDate ? `${formatDate(flight.endDate)}` : 'N/A'}
+                             </span>
                           </div>
-                        )}
-                      </div>
+                       </div>
                     </td>
-                    <td className="py-3 px-4 text-center">
-                      <div className="flex flex-col items-center gap-1.5">
-                        {flight.requestedDateIDtoDZ && (
-                          <span className={cn(
-                            "text-[9px] font-black uppercase px-2 py-0.5 rounded border w-fit whitespace-nowrap",
-                            getEffectiveStatus(flight.statusIDtoDZ || 'Requested', flight.requestedDateIDtoDZ) === 'Need Action'
-                              ? "text-rose-500 bg-rose-500/10 border-rose-500/20"
-                              : flight.statusIDtoDZ === 'Received'
-                                ? "text-emerald-400 bg-emerald-500/20 border-emerald-500/30"
-                                : "text-emerald-400 bg-emerald-500/5 border-emerald-500/10"
-                          )}>
-                            {getStatusLabel(flight.statusIDtoDZ || 'Requested', flight.requestedDateIDtoDZ)}
-                          </span>
-                        )}
-                        {flight.requestedDateDZtoID && (
-                          <span className={cn(
-                            "text-[9px] font-black uppercase px-2 py-0.5 rounded border w-fit whitespace-nowrap",
-                            getEffectiveStatus(flight.statusDZtoID || 'Requested', flight.requestedDateDZtoID) === 'Need Action'
-                              ? "text-rose-500 bg-rose-500/10 border-rose-500/20"
-                              : flight.statusDZtoID === 'Received' 
-                                ? "text-blue-400 bg-blue-500/20 border-blue-500/30"
-                                : "text-blue-400 bg-blue-500/5 border-blue-500/10"
-                          )}>
-                            {getStatusLabel(flight.statusDZtoID || 'Requested', flight.requestedDateDZtoID)}
-                          </span>
-                        )}
-                      </div>
+                    <td className="py-6 px-8">
+                       <div className="flex flex-col gap-3 min-w-[280px]">
+                         {flight.requestedDateIDtoDZ && (
+                           <div className="flex items-center gap-4 group/intel">
+                             <div className="w-8 h-8 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center">
+                                <ArrowLeft size={12} className="text-emerald-600" />
+                             </div>
+                             <div className="flex-1">
+                               <div className="flex justify-between items-center mb-1">
+                                  <span className="text-[10px] text-[#0F172A] font-black uppercase tracking-widest">Indonesia → Algeria</span>
+                                  <div className="flex flex-col items-end">
+                                     <span className="text-[10px] text-black font-mono font-black tabular-nums">{formatDate(flight.requestedDateIDtoDZ)}</span>
+                                     <span className="text-[8px] text-slate-500 font-bold uppercase">
+                                        {getDaysUntil(flight.requestedDateIDtoDZ) === 0 ? 'TODAY' : 
+                                         getDaysUntil(flight.requestedDateIDtoDZ) < 0 ? 'OVERDUE' : 
+                                         `${getDaysUntil(flight.requestedDateIDtoDZ)}d remaining`}
+                                     </span>
+                                  </div>
+                               </div>
+                               <div className="h-1 bg-slate-100 rounded-full overflow-hidden">
+                                  <div 
+                                    className="h-full bg-emerald-500 rounded-full" 
+                                    style={{ width: `${Math.max(0, 100 - (getDaysUntil(flight.requestedDateIDtoDZ) * 5))}%` }}
+                                  />
+                               </div>
+                             </div>
+                           </div>
+                         )}
+                         {flight.requestedDateDZtoID && (
+                           <div className="flex items-center gap-4 group/intel">
+                             <div className="w-8 h-8 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center">
+                                <ArrowRight size={12} className="text-blue-600" />
+                             </div>
+                             <div className="flex-1">
+                               <div className="flex justify-between items-center mb-1">
+                                  <span className="text-[10px] text-[#0F172A] font-black uppercase tracking-widest">Algeria → Indonesia</span>
+                                  <div className="flex flex-col items-end">
+                                     <span className="text-[10px] text-black font-mono font-black tabular-nums">{formatDate(flight.requestedDateDZtoID)}</span>
+                                     <span className="text-[8px] text-slate-500 font-bold uppercase">
+                                        {getDaysUntil(flight.requestedDateDZtoID) === 0 ? 'TODAY' : 
+                                         getDaysUntil(flight.requestedDateDZtoID) < 0 ? 'OVERDUE' : 
+                                         `${getDaysUntil(flight.requestedDateDZtoID)}d remaining`}
+                                     </span>
+                                  </div>
+                               </div>
+                               <div className="h-1 bg-slate-100 rounded-full overflow-hidden">
+                                  <div 
+                                    className="h-full bg-blue-500 rounded-full" 
+                                    style={{ width: `${Math.max(0, 100 - (getDaysUntil(flight.requestedDateDZtoID) * 5))}%` }}
+                                  />
+                               </div>
+                             </div>
+                           </div>
+                         )}
+                       </div>
                     </td>
-                    <td className="py-3 px-4 text-right font-mono text-[10px] text-slate-700">
-                      ID-{flight.id.slice(0,8).toUpperCase()}
+                    <td className="py-6 px-8 text-center">
+                       <div className="flex flex-col items-center gap-2">
+                         {flight.requestedDateIDtoDZ && (
+                           <div className={cn(
+                             "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border",
+                             getEffectiveStatus(flight.statusIDtoDZ || 'Requested', flight.requestedDateIDtoDZ) === 'Need Action'
+                               ? "bg-rose-600 text-white border-rose-500/20 shadow-sm"
+                               : flight.statusIDtoDZ === 'Received'
+                                 ? "bg-emerald-600 text-white border-emerald-500/20 shadow-sm"
+                                 : flight.statusIDtoDZ === 'Requested'
+                                   ? "bg-indigo-600 text-white border-indigo-500/20 shadow-sm"
+                                   : "bg-slate-500 text-white border-slate-400/20 shadow-sm"
+                           )}>
+                             {getStatusLabel(flight.statusIDtoDZ || 'Requested', flight.requestedDateIDtoDZ)}
+                           </div>
+                         )}
+                         {flight.requestedDateDZtoID && (
+                           <div className={cn(
+                             "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border",
+                             getEffectiveStatus(flight.statusDZtoID || 'Requested', flight.requestedDateDZtoID) === 'Need Action'
+                               ? "bg-rose-600 text-white border-rose-500/20 shadow-sm"
+                               : flight.statusDZtoID === 'Received' 
+                                 ? "bg-blue-600 text-white border-blue-500/20 shadow-sm"
+                                 : flight.statusDZtoID === 'Requested'
+                                   ? "bg-indigo-600 text-white border-indigo-500/20 shadow-sm"
+                                   : "bg-slate-500 text-white border-slate-400/20 shadow-sm"
+                           )}>
+                             {getStatusLabel(flight.statusDZtoID || 'Requested', flight.requestedDateDZtoID)}
+                           </div>
+                         )}
+                       </div>
                     </td>
                   </tr>
                 );
@@ -1558,57 +1733,93 @@ export function Dashboard({ isGuest }: DashboardProps) {
           </table>
 
           {/* Mobile Card Layout */}
-          <div className="md:hidden divide-y divide-white/5">
+          <div className="md:hidden divide-y divide-slate-50 bg-white">
             {filteredSummaryFlights.map((flight) => {
               const person = personnel.find(p => p.id === flight.personnelId);
               return (
-                <div key={flight.id} className="p-4 space-y-3">
+                <div key={flight.id} className="p-6 space-y-6 hover:bg-slate-50 transition-all">
                   <div className="flex justify-between items-start">
                     <div>
-                      <p className="text-[13px] text-slate-200 font-bold uppercase tracking-tighter">{person?.fullName || 'Crew member'}</p>
-                      <p className="text-[10px] text-slate-600 font-mono italic">{person?.title}</p>
+                      <h4 className="text-[14px] text-[#0F172A] font-black uppercase tracking-tight leading-tight">{person?.fullName || 'Crew member'}</h4>
+                      <p className="text-[10px] text-slate-400 font-mono font-bold mt-1 uppercase tracking-widest">{person?.rosterGroup || 'LOGISTICS CORE'}</p>
                     </div>
-                    <span className="text-[9px] font-mono text-slate-700">ID-{flight.id.slice(0,6).toUpperCase()}</span>
                   </div>
                   
-                  <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono">
-                    <Calendar size={12} className="text-slate-700" />
-                    {flight.startDate ? `${formatDate(flight.startDate)} — ${formatDate(flight.endDate)}` : 'Unscheduled'}
-                  </div>
+                  <div className="grid grid-cols-1 gap-4">
+                     <div className="p-4 bg-[#F8FAFC] border border-slate-100 rounded-2xl flex items-center justify-between">
+                        <div>
+                           <p className="text-[9px] font-black text-slate-400 uppercase mb-1 tracking-widest">Rotation Span</p>
+                           <p className="text-[11px] font-mono font-black text-[#0F172A] tabular-nums">{flight.startDate ? `${formatDate(flight.startDate)} — ${formatDate(flight.endDate)}` : 'N/A'}</p>
+                        </div>
+                        <Calendar size={18} className="text-slate-200" />
+                     </div>
 
-                  <div className="space-y-2 bg-white/[0.02] p-2 rounded-lg border border-white/5">
-                    {flight.requestedDateIDtoDZ && (
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <ArrowLeft size={10} className="text-emerald-500" />
-                          <span className="text-[10px] text-slate-400 font-mono">ID-ALG ( {formatDate(flight.requestedDateIDtoDZ)} )</span>
-                        </div>
-                        <span className={cn(
-                          "text-[8px] font-black uppercase px-2 py-0.5 rounded border",
-                          getEffectiveStatus(flight.statusIDtoDZ || 'Requested', flight.requestedDateIDtoDZ) === 'Need Action'
-                            ? "text-rose-500 bg-rose-500/10 border-rose-500/20"
-                            : "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
-                        )}>
-                          {getStatusLabel(flight.statusIDtoDZ || 'Requested', flight.requestedDateIDtoDZ)}
-                        </span>
-                      </div>
-                    )}
-                    {flight.requestedDateDZtoID && (
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <ArrowRight size={10} className="text-blue-500" />
-                          <span className="text-[10px] text-slate-400 font-mono">ALG-ID ( {formatDate(flight.requestedDateDZtoID)} )</span>
-                        </div>
-                        <span className={cn(
-                          "text-[8px] font-black uppercase px-2 py-0.5 rounded border",
-                          getEffectiveStatus(flight.statusDZtoID || 'Requested', flight.requestedDateDZtoID) === 'Need Action'
-                            ? "text-rose-500 bg-rose-500/10 border-rose-500/20"
-                            : "text-blue-400 bg-blue-500/10 border-blue-500/20"
-                        )}>
-                          {getStatusLabel(flight.statusDZtoID || 'Requested', flight.requestedDateDZtoID)}
-                        </span>
-                      </div>
-                    )}
+                     <div className="space-y-3">
+                        {flight.requestedDateIDtoDZ && (
+                           <div className="p-4 bg-[var(--theme-status)] border border-[var(--theme-border)] rounded-2xl flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                 <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center">
+                                    <ArrowLeft size={12} className="text-emerald-500" />
+                                 </div>
+                                 <div>
+                                    <p className="text-[9px] font-black text-[var(--theme-text-muted)] uppercase tracking-widest">Indonesia → Algeria</p>
+                                    <div className="flex items-center gap-2">
+                                       <p className="text-[11px] font-mono font-black text-[var(--theme-text)] tabular-nums">{formatDate(flight.requestedDateIDtoDZ)}</p>
+                                       <span className="text-[8px] text-rose-500 font-bold uppercase">
+                                          {getDaysUntil(flight.requestedDateIDtoDZ) === 0 ? 'TODAY' : 
+                                           getDaysUntil(flight.requestedDateIDtoDZ) < 0 ? 'OVERDUE' : 
+                                           `${getDaysUntil(flight.requestedDateIDtoDZ)}d remaining`}
+                                       </span>
+                                    </div>
+                                 </div>
+                              </div>
+                              <div className={cn(
+                                 "px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border shadow-sm",
+                                 getEffectiveStatus(flight.statusIDtoDZ || 'Requested', flight.requestedDateIDtoDZ) === 'Need Action'
+                                   ? "bg-rose-600 text-white border-rose-500/20"
+                                   : flight.statusIDtoDZ === 'Received'
+                                     ? "bg-emerald-600 text-white border-emerald-500/20"
+                                     : flight.statusIDtoDZ === 'Requested'
+                                       ? "bg-blue-600 text-white border-blue-500/20"
+                                       : "bg-slate-500 text-white border-slate-400/20"
+                              )}>
+                                 {getStatusLabel(flight.statusIDtoDZ || 'Requested', flight.requestedDateIDtoDZ)}
+                              </div>
+                           </div>
+                        )}
+                        {flight.requestedDateDZtoID && (
+                           <div className="p-4 bg-[var(--theme-status)] border border-[var(--theme-border)] rounded-2xl flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                 <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center">
+                                    <ArrowRight size={12} className="text-blue-600" />
+                                 </div>
+                                 <div>
+                                    <p className="text-[9px] font-black text-[var(--theme-text-muted)] uppercase tracking-widest">Algeria → Indonesia</p>
+                                    <div className="flex items-center gap-2">
+                                       <p className="text-[11px] font-mono font-black text-[var(--theme-text)] tabular-nums">{formatDate(flight.requestedDateDZtoID)}</p>
+                                       <span className="text-[8px] text-blue-500 font-bold uppercase">
+                                          {getDaysUntil(flight.requestedDateDZtoID) === 0 ? 'TODAY' : 
+                                           getDaysUntil(flight.requestedDateDZtoID) < 0 ? 'OVERDUE' : 
+                                           `${getDaysUntil(flight.requestedDateDZtoID)}d remaining`}
+                                       </span>
+                                    </div>
+                                 </div>
+                              </div>
+                              <div className={cn(
+                                 "px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border shadow-sm",
+                                 getEffectiveStatus(flight.statusDZtoID || 'Requested', flight.requestedDateDZtoID) === 'Need Action'
+                                   ? "bg-rose-600 text-white border-rose-100"
+                                   : flight.statusDZtoID === 'Received'
+                                     ? "bg-blue-600 text-white border-blue-100"
+                                     : flight.statusDZtoID === 'Requested'
+                                       ? "bg-blue-600 text-white border-blue-100"
+                                       : "bg-slate-500 text-white border-slate-100"
+                              )}>
+                                 {getStatusLabel(flight.statusDZtoID || 'Requested', flight.requestedDateDZtoID)}
+                              </div>
+                           </div>
+                        )}
+                     </div>
                   </div>
                 </div>
               );
@@ -1622,6 +1833,118 @@ export function Dashboard({ isGuest }: DashboardProps) {
           )}
         </div>
       </div>
+      {/* Detail Modal for Awaiting Ops Action */}
+      <AnimatePresence>
+        {selectedAwaitingItem && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedAwaitingItem(null)}
+              className="absolute inset-0 bg-[#0F172A]/40 backdrop-blur-md"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }} 
+              animate={{ opacity: 1, scale: 1, y: 0 }} 
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-lg bg-white rounded-[3rem] border border-slate-100 shadow-[0_50px_100px_rgba(15,23,42,0.15)] overflow-hidden"
+            >
+              <div className="p-10">
+                <div className="flex items-start justify-between mb-10">
+                  <div className="flex items-center gap-6">
+                    <div className="w-20 h-20 rounded-[2rem] bg-blue-50 flex items-center justify-center text-3xl font-black text-blue-600 shadow-inner">
+                      {selectedAwaitingItem.person?.fullName.charAt(0)}
+                    </div>
+                    <div>
+                      <h4 className="text-2xl font-black text-[#0F172A] uppercase tracking-tighter leading-tight">
+                        {selectedAwaitingItem.person?.fullName}
+                      </h4>
+                      <p className="text-[12px] text-slate-400 font-bold uppercase tracking-[0.2em] mt-1 italic">
+                        {selectedAwaitingItem.person?.title} • {selectedAwaitingItem.person?.rosterGroup}
+                      </p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setSelectedAwaitingItem(null)}
+                    className="p-3 hover:bg-slate-50 rounded-full transition-colors text-slate-400 hover:text-rose-500"
+                  >
+                    <X size={24} />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 mb-10">
+                  <div className="p-6 bg-emerald-50 rounded-3xl border border-emerald-100">
+                    <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-3">Group Anchor</p>
+                    <p className="text-lg font-black text-emerald-700 uppercase tracking-tight">{selectedAwaitingItem.person?.rosterGroup || 'CORE'}</p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="p-6 bg-white border border-slate-100 rounded-3xl flex items-center justify-between hover:border-blue-200 transition-all shadow-sm">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
+                        <ArrowLeft size={20} />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">INDONESIA → ALGERIA</p>
+                        <p className="text-sm font-black text-[#0F172A] mt-0.5">
+                          {selectedAwaitingItem.flight.requestedDateIDtoDZ ? formatDate(selectedAwaitingItem.flight.requestedDateIDtoDZ) : 'N/A'}
+                        </p>
+                        {selectedAwaitingItem.flight.requestedDateIDtoDZ && (
+                          <span className="text-[8px] text-emerald-600 font-bold uppercase mt-1 block">
+                            {getDaysUntil(selectedAwaitingItem.flight.requestedDateIDtoDZ)}d remaining
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className={cn(
+                      "px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border",
+                      selectedAwaitingItem.flight.statusIDtoDZ === 'Requested' ? "bg-rose-50 text-rose-600 border-rose-100 shadow-[0_0_12px_rgba(244,63,94,0.1)]" : "bg-emerald-50 text-emerald-600 border-emerald-100"
+                    )}>
+                      {selectedAwaitingItem.flight.statusIDtoDZ}
+                    </div>
+                  </div>
+
+                  <div className="p-6 bg-white border border-slate-100 rounded-3xl flex items-center justify-between hover:border-blue-200 transition-all shadow-sm">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
+                        <ArrowRight size={20} />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">ALGERIA → INDONESIA</p>
+                        <p className="text-sm font-black text-[#0F172A] mt-0.5">
+                          {selectedAwaitingItem.flight.requestedDateDZtoID ? formatDate(selectedAwaitingItem.flight.requestedDateDZtoID) : 'N/A'}
+                        </p>
+                        {selectedAwaitingItem.flight.requestedDateDZtoID && (
+                          <span className="text-[8px] text-blue-600 font-bold uppercase mt-1 block">
+                            {getDaysUntil(selectedAwaitingItem.flight.requestedDateDZtoID)}d remaining
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className={cn(
+                      "px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border",
+                      selectedAwaitingItem.flight.statusDZtoID === 'Requested' ? "bg-rose-50 text-rose-600 border-rose-100 shadow-[0_0_12px_rgba(244,63,94,0.1)]" : "bg-emerald-50 text-emerald-600 border-emerald-100"
+                    )}>
+                      {selectedAwaitingItem.flight.statusDZtoID}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-10 flex gap-4">
+                  <button 
+                    onClick={() => setSelectedAwaitingItem(null)}
+                    className="w-full py-4 bg-slate-50 text-slate-400 text-[11px] font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-slate-100 transition-all"
+                  >
+                    Close Log
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

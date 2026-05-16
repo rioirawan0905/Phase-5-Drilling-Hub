@@ -40,10 +40,10 @@ function toLocalDateStr(date: Date) {
 }
 
 const eventTypeColors: Record<string, { bg: string, text: string, border: string, solid: string }> = {
-  general: { bg: 'bg-blue-500/10', text: 'text-blue-400', border: 'border-blue-500/30', solid: 'bg-blue-600' },
-  meeting: { bg: 'bg-amber-500/10', text: 'text-amber-400', border: 'border-amber-500/30', solid: 'bg-amber-600' },
-  walkthrough: { bg: 'bg-purple-500/10', text: 'text-purple-400', border: 'border-purple-500/30', solid: 'bg-purple-600' },
-  holiday: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', border: 'border-emerald-500/30', solid: 'bg-emerald-600' },
+  general: { bg: 'bg-blue-500/10', text: 'text-blue-800', border: 'border-blue-500/30', solid: 'bg-blue-600' },
+  meeting: { bg: 'bg-amber-500/10', text: 'text-amber-800', border: 'border-amber-500/30', solid: 'bg-amber-600' },
+  walkthrough: { bg: 'bg-purple-500/10', text: 'text-purple-800', border: 'border-purple-500/30', solid: 'bg-purple-600' },
+  holiday: { bg: 'bg-emerald-500/10', text: 'text-emerald-800', border: 'border-emerald-500/30', solid: 'bg-emerald-600' },
 };
 
 type ViewMode = 'month' | 'week' | 'personnel' | 'gantt';
@@ -451,7 +451,7 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
 
     // Empty cells for alignment
     for (let i = 0; i < startDay; i++) {
-      days.push(<div key={`empty-${i}`} className="h-24 bg-black/10 border border-white/5 opacity-20"></div>);
+      days.push(<div key={`empty-${i}`} className="h-24 bg-slate-50 border border-slate-100"></div>);
     }
 
     for (let day = 1; day <= totalDays; day++) {
@@ -472,8 +472,8 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
           onMouseLeave={() => setHoveredDay(null)}
           onClick={() => setSelectedDayDetails(dateStr)}
           className={cn(
-            "h-28 border p-2 flex flex-col hover:bg-white/[0.02] transition-colors group relative cursor-pointer",
-            isToday ? "bg-emerald-500/5 border-emerald-500/50" : "bg-[#111114] border-white/5"
+            "h-28 border p-2 flex flex-col hover:bg-slate-50 transition-colors group relative cursor-pointer",
+            isToday ? "bg-emerald-50 border-emerald-500/50" : "bg-white border-slate-200"
           )}
         >
           {isToday && (
@@ -487,12 +487,12 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                 initial={{ opacity: 0, scale: 0.95, y: -10 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-[60] w-64 bg-[#16161a] p-3 shadow-[0_20px_50px_rgba(0,0,0,0.8)] border border-white/10 rounded-xl backdrop-blur-md flex flex-col pointer-events-none"
+                className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-[60] w-64 bg-white p-3 shadow-2xl border border-slate-200 rounded-xl backdrop-blur-md flex flex-col pointer-events-none"
               >
-                <div className="flex items-center justify-between mb-2 border-b border-white/5 pb-1.5">
+                <div className="flex items-center justify-between mb-2 border-b border-slate-100 pb-1.5">
                   <div className="flex items-center gap-1.5">
                     <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-                    <span className="text-[10px] font-black text-white uppercase tracking-widest">Active Crew ({activeSchedules.length})</span>
+                    <span className="text-[10px] font-black text-black uppercase tracking-widest">Active Crew ({activeSchedules.length})</span>
                   </div>
                   <span className="text-[9px] font-mono text-slate-500">{day} {currentDate.toLocaleString('default', { month: 'short' })}</span>
                 </div>
@@ -501,9 +501,9 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                     const p = personnel.find(pers => pers.id === s.personnelId);
                     if (!p) return null;
                     return (
-                      <div key={s.id} className="flex items-start justify-between gap-2 bg-white/[0.03] p-1.5 rounded-lg border border-white/5">
+                      <div key={s.id} className="flex items-start justify-between gap-2 bg-slate-50 p-1.5 rounded-lg border border-slate-100">
                         <div className="min-w-0 flex-1">
-                          <p className="text-[10px] font-bold text-slate-200 truncate uppercase leading-tight">{p.fullName}</p>
+                          <p className="text-[10px] font-bold text-black truncate uppercase leading-tight">{p.fullName}</p>
                           <p className="text-[8px] text-slate-500 uppercase truncate leading-tight italic">{p.rosterGroup} • {p.title}</p>
                         </div>
                         <span className={cn(
@@ -517,18 +517,18 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                   })}
                 </div>
                 <div className="mt-2 text-center">
-                  <p className="text-[7px] text-emerald-500/50 font-black uppercase tracking-tighter">Click to see full details</p>
+                  <p className="text-[7px] text-emerald-600 font-black uppercase tracking-tighter">Click to see full details</p>
                 </div>
               </motion.div>
             )}
           </AnimatePresence>
  
           <div className="flex items-center justify-between mb-1 relative z-10">
-             <span className={cn("text-[10px] font-mono", isToday ? "text-emerald-500 font-black" : "text-slate-500")}>{day}</span>
+             <span className={cn("text-[10px] font-mono", isToday ? "text-emerald-600 font-black" : "text-black")}>{day}</span>
              {!isGuest && (
                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                 <button onClick={(e) => { e.stopPropagation(); handleOpenAdd(dateStr); }} className="p-0.5 hover:text-blue-500 text-slate-700 transition-colors" title="Add Duty"><Plus size={10} /></button>
-                 <button onClick={(e) => { e.stopPropagation(); handleOpenAddEvent(dateStr); }} className="p-0.5 hover:text-emerald-500 text-slate-700 transition-colors" title="Add Event"><Tag size={8} /></button>
+                 <button onClick={(e) => { e.stopPropagation(); handleOpenAdd(dateStr); }} className="p-0.5 hover:text-blue-600 text-slate-400 transition-colors" title="Add Duty"><Plus size={10} /></button>
+                 <button onClick={(e) => { e.stopPropagation(); handleOpenAddEvent(dateStr); }} className="p-0.5 hover:text-emerald-600 text-slate-400 transition-colors" title="Add Event"><Tag size={8} /></button>
                </div>
              )}
           </div>
@@ -582,9 +582,9 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
 
     return (
       <div className="overflow-x-auto md:overflow-x-visible custom-scrollbar">
-        <div className="grid grid-cols-7 border-t border-l border-white/5 min-w-[320px] md:min-w-0">
+        <div className="grid grid-cols-7 border-t border-l border-slate-200 min-w-[320px] md:min-w-0">
           {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, idx) => (
-            <div key={`${d}-${idx}`} className="bg-black/40 border-b border-r border-white/5 py-2 text-center text-[8px] md:text-[9px] font-black text-slate-500 tracking-widest">{d}</div>
+            <div key={`${d}-${idx}`} className="bg-slate-50 border-b border-r border-slate-200 py-2 text-center text-[8px] md:text-[9px] font-black text-black tracking-widest">{d}</div>
           ))}
           {days}
         </div>
@@ -615,7 +615,7 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
               initial={{ opacity: 0, y: 5, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 5, scale: 0.95 }}
-              className="fixed z-[9999] w-64 bg-slate-900 border border-white/10 p-3 rounded-xl shadow-2xl pointer-events-none"
+              className="fixed z-[9999] w-64 bg-white border border-slate-200 p-3 rounded-xl shadow-2xl pointer-events-none"
               style={{
                 top: hoveredWeekItem.rect.top - 10,
                 left: hoveredWeekItem.rect.left + hoveredWeekItem.rect.width / 2,
@@ -624,7 +624,7 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
             >
               <div className={cn("w-full h-1 absolute top-0 left-0 rounded-t-xl", getGroupColor(hoveredWeekItem.personnel?.rosterGroup || ''))} />
               <div className="flex items-center justify-between mb-1">
-                <p className="text-[10px] font-black text-white uppercase">{hoveredWeekItem.personnel?.fullName || 'Crew Member'}</p>
+                <p className="text-[10px] font-black text-black uppercase">{hoveredWeekItem.personnel?.fullName || 'Crew Member'}</p>
                 <span className={cn(
                   "text-[8px] px-1.5 py-0.5 rounded font-black text-white",
                   hoveredWeekItem.schedule.status === 'TRANSIT' ? "bg-blue-600" : "bg-emerald-600"
@@ -635,14 +635,14 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
               <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tight mb-2 italic">
                 {hoveredWeekItem.personnel?.title || 'No title set'} • {hoveredWeekItem.personnel?.rosterGroup}
               </p>
-              <div className="space-y-1 text-[8px] font-mono border-t border-white/5 pt-2">
+              <div className="space-y-1 text-[8px] font-mono border-t border-slate-100 pt-2">
                 <div className="flex justify-between">
                   <span className="text-slate-500 font-bold">START:</span>
-                  <span className="text-white">{formatDate(hoveredWeekItem.schedule.startDate)}</span>
+                  <span className="text-black">{formatDate(hoveredWeekItem.schedule.startDate)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500 font-bold">END:</span>
-                  <span className="text-white">{formatDate(hoveredWeekItem.schedule.endDate)}</span>
+                  <span className="text-black">{formatDate(hoveredWeekItem.schedule.endDate)}</span>
                 </div>
               </div>
               {!isGuest && (
@@ -652,24 +652,24 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
           )}
         </AnimatePresence>
 
-        <div className="grid grid-cols-7 border-t border-l border-white/5 h-[450px] md:h-[600px] min-w-[320px] md:min-w-0">
+        <div className="grid grid-cols-7 border-t border-l border-slate-200 h-[450px] md:h-[600px] min-w-[320px] md:min-w-0">
         {weekDays.map(({ date, dateStr, isToday }) => (
           <div 
             key={dateStr} 
             className={cn(
-              "bg-[#111114] border-b border-r border-white/5 flex flex-col hover:bg-white/[0.01] transition-colors group relative",
-              isToday ? "bg-emerald-500/5" : "",
+              "bg-white border-b border-r border-slate-200 flex flex-col hover:bg-slate-50 transition-colors group relative",
+              isToday ? "bg-emerald-50" : "",
               isGuest ? "cursor-default" : "cursor-default"
             )}
           >
             {isToday && <div className="absolute top-0 left-0 w-full h-1 bg-emerald-500 animate-pulse z-20" />}
-            <div className={cn("bg-black/40 py-2 text-center border-b border-white/5 relative", isToday ? "bg-emerald-500/10" : "")}>
-              <p className={cn("text-[10px] font-bold uppercase", isToday ? "text-emerald-500" : "text-slate-400")}>{date.toLocaleDateString('default', { weekday: 'short' })}</p>
-              <p className={cn("text-[14px] font-mono", isToday ? "text-emerald-500 font-black" : "text-white")}>{date.getDate()}</p>
+            <div className={cn("bg-slate-50 py-2 text-center border-b border-slate-200 relative", isToday ? "bg-emerald-100" : "")}>
+              <p className={cn("text-[10px] font-bold uppercase", isToday ? "text-emerald-700" : "text-slate-600")}>{date.toLocaleDateString('default', { weekday: 'short' })}</p>
+              <p className={cn("text-[14px] font-mono", isToday ? "text-emerald-700 font-black" : "text-black")}>{date.getDate()}</p>
               {!isGuest && (
                 <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => handleOpenAdd(dateStr)} className="p-1 hover:text-blue-500 text-slate-700" title="Add Duty"><Plus size={12} /></button>
-                  <button onClick={() => handleOpenAddEvent(dateStr)} className="p-1 hover:text-emerald-500 text-slate-700" title="Add Event"><Tag size={10} /></button>
+                  <button onClick={() => handleOpenAdd(dateStr)} className="p-1 hover:text-blue-600 text-slate-400" title="Add Duty"><Plus size={12} /></button>
+                  <button onClick={() => handleOpenAddEvent(dateStr)} className="p-1 hover:text-emerald-600 text-slate-400" title="Add Event"><Tag size={10} /></button>
                 </div>
               )}
             </div>
@@ -691,11 +691,11 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                       <p className={cn("text-[8px] font-bold truncate", colors.text)}>{ev.title}</p>
                     </div>
                     {/* Tooltip on hover */}
-                    <div className="absolute bottom-full left-0 mb-2 w-40 bg-slate-900 p-2 rounded-xl border border-white/10 text-[8px] invisible group-hover/event:visible z-50 shadow-2xl">
+                    <div className="absolute bottom-full left-0 mb-2 w-40 bg-white p-2 rounded-xl border border-slate-200 text-[8px] invisible group-hover/event:visible z-50 shadow-2xl">
                       <div className={cn("w-full h-0.5 absolute top-0 left-0 rounded-t-xl", colors.solid)} />
-                      <p className="font-bold border-b border-white/10 pb-1 mb-1 text-white">{ev.title}</p>
-                      <p className="text-slate-400 leading-tight">{ev.description || 'No description provided'}</p>
-                      <p className="text-[7px] text-slate-600 mt-2 font-mono uppercase">{formatDate(ev.startDate)} - {formatDate(ev.endDate)}</p>
+                      <p className="font-bold border-b border-slate-100 pb-1 mb-1 text-black">{ev.title}</p>
+                      <p className="text-slate-500 leading-tight">{ev.description || 'No description provided'}</p>
+                      <p className="text-[7px] text-slate-400 mt-2 font-mono uppercase">{formatDate(ev.startDate)} - {formatDate(ev.endDate)}</p>
                     </div>
                     {!isGuest && (
                       <button onClick={(e) => handleDeleteEvent(ev.id, e)} className="opacity-0 group-hover/event:opacity-100 hover:text-rose-500 text-slate-700 transition-opacity">
@@ -833,8 +833,8 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                     key={s.id} 
                     onClick={() => handleEdit(s)}
                     className={cn(
-                      "bg-black/40 border border-white/10 px-4 py-3 rounded-xl shrink-0 min-w-[160px] relative overflow-hidden group/item transition-all",
-                      isGuest ? "cursor-default" : "cursor-pointer hover:border-white/20"
+                      "bg-slate-50 border border-slate-200 px-4 py-3 rounded-xl shrink-0 min-w-[160px] relative overflow-hidden group/item transition-all shadow-sm",
+                      isGuest ? "cursor-default" : "cursor-pointer hover:border-blue-200 hover:bg-white"
                     )}
                   >
                     <div className={cn(
@@ -846,18 +846,18 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                       {!isGuest && (
                         <button 
                           onClick={(e) => { e.stopPropagation(); handleDelete(s.id); }}
-                          className="text-slate-800 hover:text-rose-500 opacity-0 group-hover/item:opacity-100 mt-[-4px]"
+                          className="text-slate-300 hover:text-rose-500 opacity-0 group-hover/item:opacity-100 mt-[-4px]"
                         >
                           <Trash2 size={10} />
                         </button>
                       )}
                     </div>
                     <div className="flex flex-col gap-1">
-                       <p className="text-[11px] text-white font-mono flex items-center gap-2">
-                         <span className="text-slate-600 text-[9px] font-bold">START:</span> {formatDate(s.startDate)}
+                       <p className="text-[11px] text-[#1E293B] font-mono font-black flex items-center gap-2">
+                         <span className="text-slate-400 text-[9px] font-bold">START:</span> {formatDate(s.startDate)}
                        </p>
-                       <p className="text-[11px] text-white font-mono flex items-center gap-2 border-t border-white/5 pt-1 mt-1">
-                         <span className="text-slate-600 text-[9px] font-bold">END:</span> {formatDate(s.endDate)}
+                       <p className="text-[11px] text-[#1E293B] font-mono font-black flex items-center gap-2 border-t border-slate-100 pt-1 mt-1">
+                         <span className="text-slate-400 text-[9px] font-bold">END:</span> {formatDate(s.endDate)}
                        </p>
                     </div>
                   </div>
@@ -897,26 +897,26 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
       <div className="overflow-x-auto custom-scrollbar border rounded-xl relative" ref={ganttRef} style={{ backgroundColor: 'var(--theme-container)', borderColor: 'var(--theme-border)', maxHeight: '700px', overflowY: 'auto' }}>
         <div style={{ width: timelineDates.length * dayWidth + 192 }}>
           {/* Header */}
-          <div className="flex border-b border-white/5 bg-[#111114] sticky top-0 z-40">
-            <div className="w-48 shrink-0 border-r border-white/5 p-3 text-[10px] font-black text-slate-400 bg-[#16161a] uppercase tracking-widest sticky left-0 z-50">Crew Roster</div>
+          <div className="flex border-b border-slate-200 bg-white sticky top-0 z-40">
+            <div className="w-48 shrink-0 border-r border-slate-200 p-3 text-[10px] font-black text-black bg-slate-50 uppercase tracking-widest sticky left-0 z-50">Crew Roster</div>
             <div className="flex-1 flex overflow-hidden">
               {monthsToShow.map(m => {
                 const days = daysInMonth(m.getFullYear(), m.getMonth());
                 return (
-                  <div key={m.getTime()} style={{ width: days * dayWidth }} className="shrink-0 text-center text-[9px] font-black text-slate-300 py-3 bg-white/[0.02] border-r border-white/5 uppercase">
+                  <div key={m.getTime()} style={{ width: days * dayWidth }} className="shrink-0 text-center text-[9px] font-black text-black py-3 bg-slate-50/50 border-r border-slate-200 uppercase">
                     {m.toLocaleString('default', { month: 'long', year: 'numeric' })}
                   </div>
                 );
               })}
             </div>
           </div>
-          <div className="flex border-b border-white/5 bg-[#0a0a0c] sticky top-[42px] z-40">
-            <div className="w-48 shrink-0 border-r border-white/5 sticky left-0 z-50 bg-[#111114]"></div>
+          <div className="flex border-b border-slate-200 bg-white sticky top-[42px] z-40">
+            <div className="w-48 shrink-0 border-r border-slate-200 sticky left-0 z-50 bg-white"></div>
             <div className="flex-1 flex">
               {timelineDates.map(({ date, isToday }, i) => (
                 <div key={i} style={{ width: dayWidth }} className={cn(
-                  "shrink-0 text-center text-[8px] font-bold py-1.5 border-r border-white/5 relative",
-                  isToday ? "bg-emerald-500/20 text-emerald-400" : (date.getDay() === 0 || date.getDay() === 6 ? "bg-white/[0.03] text-slate-400" : "text-slate-600")
+                  "shrink-0 text-center text-[8px] font-bold py-1.5 border-r border-slate-200 relative",
+                  isToday ? "bg-emerald-500/20 text-emerald-600" : (date.getDay() === 0 || date.getDay() === 6 ? "bg-slate-50 text-slate-400" : "text-black")
                 )}>
                   {date.getDate()}
                   {isToday && (
@@ -942,11 +942,11 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
           })()}
 
           {/* Rows */}
-          <div className="divide-y divide-white/5 relative">
+          <div className="divide-y divide-slate-200 relative">
             {/* Vertical Separators Grid */}
             <div className="absolute inset-0 pointer-events-none flex" style={{ left: 192 }}>
               {timelineDates.map((_, i) => (
-                <div key={i} style={{ width: dayWidth }} className="h-full border-r border-white/5 shrink-0" />
+                <div key={i} style={{ width: dayWidth }} className="h-full border-r border-slate-200 shrink-0" />
               ))}
             </div>
 
@@ -954,12 +954,12 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
             {sortedPersonnel.map(p => {
               if (p.id === 'HUB_EVENTS') {
                 return (
-                  <div key="HUB_EVENTS" className="flex group hover:bg-white/[0.01] relative z-20">
-                    <div className="w-48 shrink-0 border-r border-white/5 p-3 bg-[#16161a] sticky left-0 z-30">
-                      <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest flex items-center gap-2">
+                  <div key="HUB_EVENTS" className="flex group hover:bg-slate-50 relative z-20">
+                    <div className="w-48 shrink-0 border-r border-slate-200 p-3 bg-slate-50 sticky left-0 z-30">
+                      <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-2">
                         <Tag size={12} /> Hub Events
                       </p>
-                      <p className="text-[8px] text-slate-600 font-mono uppercase mt-1">General Schedule</p>
+                      <p className="text-[8px] text-slate-500 font-mono uppercase mt-1">General Schedule</p>
                     </div>
                     <div className="flex-1 relative flex h-14 items-center">
                       {events.map(ev => {
@@ -986,20 +986,20 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                             <span className="text-[9px] font-black uppercase tracking-widest truncate">{ev.title}</span>
                             
                             {/* Enhanced Tooltip for Hub Events */}
-                            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-56 bg-slate-900 border border-white/10 p-3 rounded-xl shadow-2xl opacity-0 group-hover/ev:opacity-100 invisible group-hover/ev:visible transition-all z-50 pointer-events-none">
+                            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-56 bg-white border border-slate-200 p-3 rounded-xl shadow-2xl opacity-0 group-hover/ev:opacity-100 invisible group-hover/ev:visible transition-all z-50 pointer-events-none">
                                <div className={cn("w-full h-1 absolute top-0 left-0 rounded-t-xl", colors.solid)} />
                                <div className="flex items-center justify-between mb-1">
-                                 <p className="text-[10px] font-black text-white uppercase">{ev.title}</p>
+                                 <p className="text-[10px] font-black text-black uppercase">{ev.title}</p>
                                  <span className={cn("text-[8px] font-black uppercase tracking-tighter", colors.text)}>{ev.type}</span>
                                </div>
-                               <p className="text-[9px] text-slate-400 leading-tight mb-2 italic">
+                               <p className="text-[9px] text-slate-500 leading-tight mb-2 italic">
                                  {ev.description || 'Global hub-wide event'}
                                </p>
-                               <div className="flex items-center gap-2 text-[9px] font-mono border-t border-white/5 pt-2">
+                               <div className="flex items-center gap-2 text-[9px] font-mono border-t border-slate-100 pt-2">
                                  <CalendarIcon size={10} className={colors.text} />
-                                 <span className="text-white">{formatDate(ev.startDate)}</span>
+                                 <span className="text-black">{formatDate(ev.startDate)}</span>
                                  <span className="text-slate-500">-</span>
-                                 <span className="text-white">{formatDate(ev.endDate)}</span>
+                                 <span className="text-black">{formatDate(ev.endDate)}</span>
                                </div>
                             </div>
                           </div>
@@ -1011,9 +1011,9 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
               }
               
               return (
-                <div key={p.id} className="flex group hover:bg-white/[0.01] relative z-10">
-                  <div className="w-48 shrink-0 border-r border-white/5 p-3 bg-[#111114] sticky left-0 z-30">
-                    <p className="text-[10px] font-bold text-[var(--theme-text)] uppercase truncate">{p.fullName}</p>
+                <div key={p.id} className="flex group hover:bg-slate-50 relative z-10">
+                  <div className="w-48 shrink-0 border-r border-slate-200 p-3 bg-white sticky left-0 z-30">
+                    <p className="text-[10px] font-bold text-black uppercase truncate">{p.fullName}</p>
                     <p className={cn(
                       "text-[8px] px-1.5 rounded-sm w-fit font-mono uppercase font-black mt-0.5 text-white",
                       getGroupColor(p.rosterGroup)
@@ -1057,21 +1057,21 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                         </div>
 
                         {/* Enhanced Tooltip */}
-                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-slate-900 border border-white/10 p-3 rounded-xl shadow-2xl opacity-0 group-hover/bar:opacity-100 invisible group-hover/bar:visible transition-all z-50 pointer-events-none">
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-white border border-slate-200 p-3 rounded-xl shadow-2xl opacity-0 group-hover/bar:opacity-100 invisible group-hover/bar:visible transition-all z-50 pointer-events-none">
                           <div className={cn("w-full h-1 absolute top-0 left-0 rounded-t-xl", getGroupColor(p.rosterGroup))} />
-                          <p className="text-[10px] font-black text-white mb-1 uppercase">{p.fullName}</p>
+                          <p className="text-[10px] font-black text-black mb-1 uppercase">{p.fullName}</p>
                           <div className="flex items-center gap-2 mb-2">
                              <span className={cn("text-[7px] px-1.5 py-0.5 rounded font-black text-white", getGroupColor(p.rosterGroup))}>{p.rosterGroup}</span>
                              <span className="text-[8px] font-bold text-slate-400">{s.status}</span>
                           </div>
-                          <div className="space-y-1 text-[9px] font-mono">
+                          <div className="space-y-1 text-[9px] font-mono border-t border-slate-100 pt-2">
                             <div className="flex justify-between">
                               <span className="text-slate-500 font-bold">START:</span>
-                              <span className="text-white">{formatDate(s.startDate)}</span>
+                              <span className="text-black">{formatDate(s.startDate)}</span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-slate-500 font-bold">END:</span>
-                              <span className="text-white">{formatDate(s.endDate)}</span>
+                              <span className="text-black">{formatDate(s.endDate)}</span>
                             </div>
                           </div>
                         </div>
@@ -1091,13 +1091,13 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
   return (
     <div className="space-y-6">
       {/* Search and Filters Bar */}
-      <div className="flex flex-wrap items-center gap-4 bg-white/[0.02] border border-white/5 p-4 rounded-2xl">
+      <div className="flex flex-wrap items-center gap-4 bg-[var(--theme-card)] border border-[var(--theme-border)] p-4 rounded-2xl">
         <div className="flex-1 min-w-[200px] relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--theme-text-muted)]" size={14} />
           <select 
             value={filterPersonnel}
             onChange={(e) => setFilterPersonnel(e.target.value)}
-            className="w-full bg-black/40 border border-white/10 rounded-xl pl-10 pr-4 py-2 text-[10px] font-black text-white uppercase tracking-widest focus:outline-none focus:border-blue-500/50 transition-all appearance-none"
+            className="w-full bg-[var(--theme-container)] border border-[var(--theme-border)] rounded-xl pl-10 pr-4 py-2 text-[10px] font-black text-[var(--theme-text)] uppercase tracking-widest focus:outline-none focus:border-blue-500 transition-all appearance-none"
           >
             <option value="ALL">All Crew Members</option>
             {personnel.map(p => (
@@ -1108,11 +1108,11 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
 
         <div className="flex items-center gap-2">
           <div className="relative">
-            <Users className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
+            <Users className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--theme-text-muted)]" size={14} />
             <select 
               value={filterGroup}
               onChange={(e) => setFilterGroup(e.target.value)}
-              className="bg-black/40 border border-white/10 rounded-xl pl-10 pr-8 py-2 text-[10px] font-black text-white uppercase tracking-widest focus:outline-none focus:border-blue-500/50 appearance-none"
+              className="bg-[var(--theme-container)] border border-[var(--theme-border)] rounded-xl pl-10 pr-8 py-2 text-[10px] font-black text-[var(--theme-text)] uppercase tracking-widest focus:outline-none focus:border-blue-500 appearance-none"
             >
               <option value="ALL">All Groups</option>
               {uniqueGroups.map(g => (
@@ -1122,11 +1122,11 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
           </div>
 
           <div className="relative">
-            <SortAsc className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
+            <SortAsc className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--theme-text-muted)]" size={14} />
             <select 
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as any)}
-              className="bg-black/40 border border-white/10 rounded-xl pl-10 pr-8 py-2 text-[10px] font-black text-white uppercase tracking-widest focus:outline-none focus:border-blue-500/50 appearance-none"
+              className="bg-[var(--theme-container)] border border-[var(--theme-border)] rounded-xl pl-10 pr-8 py-2 text-[10px] font-black text-[var(--theme-text)] uppercase tracking-widest focus:outline-none focus:border-blue-500 appearance-none"
             >
               <option value="name">Sort by Name</option>
               <option value="group">Sort by Group</option>
@@ -1139,7 +1139,7 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
             onClick={() => setShowGlobalEvents(!showGlobalEvents)}
             className={cn(
               "p-2 rounded-xl border transition-all flex items-center gap-2 text-[9px] font-black uppercase tracking-widest",
-              showGlobalEvents ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" : "bg-white/5 border-white/10 text-slate-500"
+              showGlobalEvents ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" : "bg-[var(--theme-status)] border-[var(--theme-border)] text-[var(--theme-text-muted)]"
             )}
             title="Toggle Global Events"
           >
@@ -1147,11 +1147,11 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
             <span className="hidden sm:inline">Global Events</span>
           </button>
 
-          <div className="h-6 w-px bg-white/10 mx-2" />
+          <div className="h-6 w-px bg-[var(--theme-border)] mx-2" />
 
           <button 
             onClick={handleCopyToClipboard}
-            className="p-2 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 text-slate-300 transition-all flex items-center gap-2"
+            className="p-2 bg-[var(--theme-status)] border border-[var(--theme-border)] rounded-xl hover:bg-[var(--theme-card)] text-[var(--theme-text-muted)] transition-all flex items-center gap-2"
             title="Copy Summary"
           >
             <Copy size={14} />
@@ -1162,7 +1162,7 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
             onClick={handleExportPDF}
             disabled={isExporting}
             className={cn(
-              "p-2 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 text-slate-300 transition-all flex items-center gap-2",
+              "p-2 bg-[var(--theme-status)] border border-[var(--theme-border)] rounded-xl hover:bg-[var(--theme-card)] text-[var(--theme-text-muted)] transition-all flex items-center gap-2",
               isExporting && "opacity-50 cursor-not-allowed"
             )}
             title="Export as PDF"
@@ -1201,7 +1201,7 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
         </div>
 
         <div className="flex flex-wrap items-center justify-between lg:justify-end gap-3 md:gap-4 order-1 lg:order-2 w-full lg:w-auto">
-          <div className="flex items-center gap-2 md:gap-4 flex-1 lg:flex-none justify-between lg:justify-start bg-white/[0.02] border border-white/5 rounded-xl px-3 py-1.5 md:px-0 md:py-0 md:bg-transparent md:border-none">
+          <div className="flex items-center gap-2 md:gap-4 flex-1 lg:flex-none justify-between lg:justify-start bg-[var(--theme-card)] border border-[var(--theme-border)] rounded-xl px-3 py-1.5 md:px-0 md:py-0 md:bg-transparent md:border-none">
             <h3 className="text-[10px] md:text-sm font-black text-[var(--theme-text)] uppercase tracking-widest text-center min-w-[80px] md:min-w-[150px]">
               {viewMode === 'week' 
                 ? `WK ${currentDate.toLocaleDateString('default', { month: 'short', day: 'numeric' })}`
@@ -1273,52 +1273,52 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
               initial={{ scale: 0.95, opacity: 0, y: 10 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.95, opacity: 0, y: 10 }}
-              className="relative w-full max-w-md bg-[#16161a] border border-white/10 rounded-2xl shadow-2xl p-6 overflow-hidden"
+              className="relative w-full max-w-md bg-[var(--theme-card)] border border-[var(--theme-border)] rounded-2xl shadow-2xl p-6 overflow-hidden"
             >
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-bold text-white uppercase tracking-widest flex items-center gap-3">
+                <h3 className="text-lg font-bold text-[var(--theme-text)] uppercase tracking-widest flex items-center gap-3">
                   <Tag size={18} className="text-emerald-500" />
                   {editingEvent ? 'Edit Hub Event' : 'Create Hub Event'}
                 </h3>
-                <button onClick={() => setIsEventModalOpen(false)} className="p-2 text-slate-500 hover:text-white transition-colors">
+                <button onClick={() => setIsEventModalOpen(false)} className="p-2 text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] transition-colors">
                   <X size={20} />
                 </button>
               </div>
 
               <form onSubmit={handleSubmitEvent(onSaveEvent)} className="space-y-4">
                 <div className="space-y-1">
-                  <label className="text-[10px] text-slate-500 uppercase font-bold px-1">Event Title</label>
-                  <input {...registerEvent('title')} className="w-full bg-[#0a0a0c] border border-white/5 px-4 py-2.5 text-sm text-slate-300 rounded-lg focus:outline-none focus:border-emerald-500/30" placeholder="e.g. Rig Maintenance" />
+                  <label className="text-[10px] text-[var(--theme-text-muted)] uppercase font-bold px-1">Event Title</label>
+                  <input {...registerEvent('title')} className="w-full bg-[var(--theme-status)] border border-[var(--theme-border)] px-4 py-2.5 text-sm text-[var(--theme-text)] rounded-lg focus:outline-none focus:border-emerald-500/30" placeholder="e.g. Rig Maintenance" />
                   {eventErrors.title && <p className="text-[10px] text-rose-500 px-1">{eventErrors.title.message}</p>}
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[10px] text-slate-500 uppercase font-bold px-1">Description</label>
-                  <textarea {...registerEvent('description')} className="w-full bg-[#0a0a0c] border border-white/5 px-4 py-2.5 text-sm text-slate-300 rounded-lg focus:outline-none focus:border-emerald-500/30 min-h-[80px] resize-none" placeholder="Provide event details..." />
+                  <label className="text-[10px] text-[var(--theme-text-muted)] uppercase font-bold px-1">Description</label>
+                  <textarea {...registerEvent('description')} className="w-full bg-[var(--theme-status)] border border-[var(--theme-border)] px-4 py-2.5 text-sm text-[var(--theme-text)] rounded-lg focus:outline-none focus:border-emerald-500/30 min-h-[80px] resize-none" placeholder="Provide event details..." />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="text-[10px] text-slate-500 uppercase font-bold px-1">
+                    <label className="text-[10px] text-[var(--theme-text-muted)] uppercase font-bold px-1">
                       {watchRecurrence === 'none' ? 'Start Date' : 'Series Start Date'}
                     </label>
-                    <input type="date" {...registerEvent('startDate')} className="w-full bg-[#0a0a0c] border border-white/5 px-4 py-2.5 text-sm text-slate-300 rounded-lg focus:outline-none focus:border-emerald-500/30" />
+                    <input type="date" {...registerEvent('startDate')} className="w-full bg-[var(--theme-status)] border border-[var(--theme-border)] px-4 py-2.5 text-sm text-[var(--theme-text)] rounded-lg focus:outline-none focus:border-emerald-500/30" />
                     {eventErrors.startDate && <p className="text-[10px] text-rose-500 px-1">{eventErrors.startDate.message}</p>}
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] text-slate-500 uppercase font-bold px-1">
+                    <label className="text-[10px] text-[var(--theme-text-muted)] uppercase font-bold px-1">
                       {watchRecurrence === 'none' ? 'End Date' : 'Series End Date'}
                     </label>
-                    <input type="date" {...registerEvent('endDate')} className="w-full bg-[#0a0a0c] border border-white/5 px-4 py-2.5 text-sm text-slate-300 rounded-lg focus:outline-none focus:border-emerald-500/30" />
+                    <input type="date" {...registerEvent('endDate')} className="w-full bg-[var(--theme-status)] border border-[var(--theme-border)] px-4 py-2.5 text-sm text-[var(--theme-text)] rounded-lg focus:outline-none focus:border-emerald-500/30" />
                     {eventErrors.endDate && <p className="text-[10px] text-rose-500 px-1">{eventErrors.endDate.message}</p>}
                   </div>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[10px] text-slate-500 uppercase font-bold px-1">Location</label>
+                  <label className="text-[10px] text-[var(--theme-text-muted)] uppercase font-bold px-1">Location</label>
                   <select 
                     {...registerEvent('location')}
-                    className="w-full bg-[#0a0a0c] border border-white/5 px-4 py-2.5 text-sm text-slate-300 rounded-lg focus:outline-none focus:border-emerald-500/30"
+                    className="w-full bg-[var(--theme-status)] border border-[var(--theme-border)] px-4 py-2.5 text-sm text-[var(--theme-text)] rounded-lg focus:outline-none focus:border-emerald-500/30"
                   >
                     <option value="Algiers">Algiers</option>
                     <option value="Hassi Messaoud">Hassi Messaoud</option>
@@ -1328,11 +1328,11 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[10px] text-slate-500 uppercase font-bold px-1">Recurrence</label>
+                  <label className="text-[10px] text-[var(--theme-text-muted)] uppercase font-bold px-1">Recurrence</label>
                   <select 
                     {...registerEvent('recurrence')}
                     disabled={!!editingEvent}
-                    className="w-full bg-[#0a0a0c] border border-white/5 px-4 py-2.5 text-sm text-slate-300 rounded-lg focus:outline-none focus:border-emerald-500/30 disabled:opacity-50"
+                    className="w-full bg-[var(--theme-status)] border border-[var(--theme-border)] px-4 py-2.5 text-sm text-[var(--theme-text)] rounded-lg focus:outline-none focus:border-emerald-500/30 disabled:opacity-50"
                   >
                     <option value="none">No Recurrence</option>
                     <option value="daily">Daily</option>
@@ -1446,22 +1446,22 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
               initial={{ scale: 0.95, opacity: 0, y: 10 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.95, opacity: 0, y: 10 }}
-              className="relative w-full max-w-md bg-[#16161a] border border-white/10 rounded-2xl shadow-2xl p-6 overflow-hidden"
+              className="relative w-full max-w-md bg-[var(--theme-card)] border border-[var(--theme-border)] rounded-2xl shadow-2xl p-6 overflow-hidden"
             >
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-bold text-white uppercase tracking-widest flex items-center gap-3">
+                <h3 className="text-lg font-bold text-[var(--theme-text)] uppercase tracking-widest flex items-center gap-3">
                   <CalendarIcon size={18} className="text-blue-500" />
                   {editingSchedule ? 'Edit Duty Period' : 'Assign Duty Period'}
                 </h3>
-                <button onClick={() => setIsModalOpen(false)} className="p-2 text-slate-500 hover:text-white transition-colors">
+                <button onClick={() => setIsModalOpen(false)} className="p-2 text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] transition-colors">
                   <X size={20} />
                 </button>
               </div>
 
               <form onSubmit={handleSubmit(onSaveSchedule)} className="space-y-4">
                 <div className="space-y-1">
-                  <label className="text-[10px] text-slate-500 uppercase font-bold px-1">Select Personnel (Multi-select enabled)</label>
-                  <div className="max-h-[150px] overflow-y-auto custom-scrollbar border border-white/5 bg-[#0a0a0c] rounded-lg p-2 space-y-1">
+                  <label className="text-[10px] text-[var(--theme-text-muted)] uppercase font-bold px-1">Select Personnel (Multi-select enabled)</label>
+                  <div className="max-h-[150px] overflow-y-auto custom-scrollbar border border-[var(--theme-border)] bg-[var(--theme-status)] rounded-lg p-2 space-y-1">
                     {personnel.map(p => (
                       <label key={p.id} className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-white/5 cursor-pointer transition-colors group">
                         <input 
@@ -1480,8 +1480,8 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                           className="w-4 h-4 rounded border-white/10 bg-black text-blue-600 focus:ring-0 focus:ring-offset-0"
                         />
                         <div className="flex flex-col">
-                           <span className="text-[11px] font-bold text-slate-300 group-hover:text-white transition-colors">{p.fullName}</span>
-                           <span className="text-[9px] text-slate-600 uppercase font-mono">{p.rosterGroup} • {p.title}</span>
+                           <span className="text-[11px] font-bold text-[var(--theme-text-muted)] group-hover:text-[var(--theme-text)] transition-colors">{p.fullName}</span>
+                           <span className="text-[9px] text-[var(--theme-text-muted)] uppercase font-mono opacity-60">{p.rosterGroup} • {p.title}</span>
                         </div>
                       </label>
                     ))}
@@ -1491,13 +1491,13 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="text-[10px] text-slate-500 uppercase font-bold px-1">Start Date</label>
-                    <input type="date" {...register('startDate')} className="w-full bg-[#0a0a0c] border border-white/5 px-4 py-2.5 text-sm text-slate-300 rounded-lg focus:outline-none focus:border-blue-500/30" />
+                    <label className="text-[10px] text-[var(--theme-text-muted)] uppercase font-bold px-1">Start Date</label>
+                    <input type="date" {...register('startDate')} className="w-full bg-[var(--theme-status)] border border-[var(--theme-border)] px-4 py-2.5 text-sm text-[var(--theme-text)] rounded-lg focus:outline-none focus:border-blue-500/30" />
                     {errors.startDate && <p className="text-[10px] text-rose-500 px-1">{errors.startDate.message}</p>}
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] text-slate-500 uppercase font-bold px-1">End Date</label>
-                    <input type="date" {...register('endDate')} className="w-full bg-[#0a0a0c] border border-white/5 px-4 py-2.5 text-sm text-slate-300 rounded-lg focus:outline-none focus:border-blue-500/30" />
+                    <label className="text-[10px] text-[var(--theme-text-muted)] uppercase font-bold px-1">End Date</label>
+                    <input type="date" {...register('endDate')} className="w-full bg-[var(--theme-status)] border border-[var(--theme-border)] px-4 py-2.5 text-sm text-[var(--theme-text)] rounded-lg focus:outline-none focus:border-blue-500/30" />
                     {errors.endDate && <p className="text-[10px] text-rose-500 px-1">{errors.endDate.message}</p>}
                   </div>
                 </div>
@@ -1572,17 +1572,17 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
               initial={{ scale: 0.9, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              className="relative w-full max-w-2xl bg-[#0a0a0c] border border-white/10 rounded-2xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden"
+              className="relative w-full max-w-2xl bg-[var(--theme-card)] border border-[var(--theme-border)] rounded-2xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden"
             >
-              <div className="p-6 border-b border-white/5 bg-gradient-to-r from-blue-600/10 to-emerald-600/10 flex items-center justify-between">
+              <div className="p-6 border-b border-[var(--theme-border)] bg-gradient-to-r from-blue-600/10 to-emerald-600/10 flex items-center justify-between">
                 <div>
-                   <h3 className="text-xl font-black text-white uppercase tracking-widest flex items-center gap-3">
+                   <h3 className="text-xl font-black text-[var(--theme-text)] uppercase tracking-widest flex items-center gap-3">
                      <CalendarIcon className="text-blue-500" />
                      {formatDate(selectedDayDetails)}
                    </h3>
-                   <p className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.2em] mt-1 ml-9">Daily Activity Overview</p>
+                   <p className="text-[10px] text-[var(--theme-text-muted)] font-bold uppercase tracking-[0.2em] mt-1 ml-9">Daily Activity Overview</p>
                 </div>
-                <button onClick={() => setSelectedDayDetails(null)} className="p-2 text-slate-500 hover:text-white transition-colors bg-white/5 rounded-xl">
+                <button onClick={() => setSelectedDayDetails(null)} className="p-2 text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] transition-colors bg-[var(--theme-status)] rounded-xl">
                   <X size={20} />
                 </button>
               </div>
@@ -1600,26 +1600,26 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                     {events.filter(e => selectedDayDetails >= e.startDate && selectedDayDetails <= e.endDate).map(ev => {
                       const colors = eventTypeColors[ev.type] || eventTypeColors.general;
                       return (
-                        <div key={ev.id} className={cn("p-4 rounded-xl border flex gap-4 bg-white/[0.02]", colors.border)}>
+                        <div key={ev.id} className={cn("p-4 rounded-xl border flex gap-4 bg-[var(--theme-status)]", colors.border)}>
                            <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center shrink-0", colors.bg)}>
                               {getEventIcon(ev.type, 20)}
                            </div>
                            <div className="min-w-0 flex-1">
                               <p className={cn("text-[8px] font-black uppercase tracking-widest mb-1", colors.text)}>{ev.type}</p>
-                              <h5 className="text-sm font-bold text-white truncate">{ev.title}</h5>
-                              <p className="text-[10px] text-slate-500 mt-1 line-clamp-2 leading-relaxed font-medium">{ev.description || 'No additional details provided for this event.'}</p>
-                              <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between">
-                                 <span className="text-[9px] font-mono text-slate-600">{formatDate(ev.startDate)}</span>
-                                 <button onClick={() => { setSelectedDayDetails(null); handleEditEvent(ev); }} className="text-[8px] font-black text-white px-2 py-1 bg-white/5 hover:bg-white/10 rounded uppercase transition-colors">Edit Event</button>
+                              <h5 className="text-sm font-bold text-[var(--theme-text)] truncate">{ev.title}</h5>
+                              <p className="text-[10px] text-[var(--theme-text-muted)] mt-1 line-clamp-2 leading-relaxed font-medium">{ev.description || 'No additional details provided for this event.'}</p>
+                              <div className="mt-3 pt-3 border-t border-[var(--theme-border)] flex items-center justify-between">
+                                 <span className="text-[9px] font-mono text-[var(--theme-text-muted)]">{formatDate(ev.startDate)}</span>
+                                 <button onClick={() => { setSelectedDayDetails(null); handleEditEvent(ev); }} className="text-[8px] font-black text-[var(--theme-text)] px-2 py-1 bg-[var(--theme-container)] hover:bg-[var(--theme-card)] rounded uppercase transition-colors">Edit Event</button>
                               </div>
                            </div>
                         </div>
                       );
                     })}
                     {events.filter(e => selectedDayDetails >= e.startDate && selectedDayDetails <= e.endDate).length === 0 && (
-                      <div className="col-span-full py-8 text-center bg-white/[0.02] border border-dashed border-white/5 rounded-xl">
-                        <Tag size={24} className="mx-auto text-slate-800 mb-2" />
-                        <p className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">No global events scheduled for this day</p>
+                      <div className="col-span-full py-8 text-center bg-[var(--theme-status)] border border-dashed border-[var(--theme-border)] rounded-xl">
+                        <Tag size={24} className="mx-auto text-[var(--theme-text-muted)] mb-2 opacity-20" />
+                        <p className="text-[10px] text-[var(--theme-text-muted)] font-bold uppercase tracking-widest">No global events scheduled for this day</p>
                       </div>
                     )}
                   </div>
@@ -1638,7 +1638,7 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                       const p = personnel.find(pers => pers.id === s.personnelId);
                       if (!p) return null;
                       return (
-                        <div key={s.id} className="p-3 rounded-xl bg-white/[0.03] border border-white/5 group hover:border-blue-500/30 transition-all flex flex-col justify-between">
+                        <div key={s.id} className="p-3 rounded-xl bg-[var(--theme-status)] border border-[var(--theme-border)] group hover:border-blue-500/30 transition-all flex flex-col justify-between">
                            <div className="mb-4">
                               <div className="flex items-center justify-between mb-2">
                                  <span className={cn(
@@ -1654,11 +1654,11 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                                    {s.status}
                                  </span>
                               </div>
-                              <h5 className="text-xs font-bold text-slate-200 uppercase truncate">{p.fullName}</h5>
-                              <p className="text-[10px] text-slate-500 font-mono mt-0.5">{p.title}</p>
+                              <h5 className="text-xs font-bold text-[var(--theme-text)] uppercase truncate">{p.fullName}</h5>
+                              <p className="text-[10px] text-[var(--theme-text-muted)] font-mono mt-0.5">{p.title}</p>
                            </div>
-                           <div className="pt-3 border-t border-white/5 flex items-center justify-between">
-                              <p className="text-[8px] text-slate-600 font-mono italic">Ends: {formatDate(s.endDate)}</p>
+                           <div className="pt-3 border-t border-[var(--theme-border)] flex items-center justify-between">
+                              <p className="text-[8px] text-[var(--theme-text-muted)] font-mono italic">Ends: {formatDate(s.endDate)}</p>
                               <button onClick={() => { setSelectedDayDetails(null); handleEdit(s); }} className="text-[9px] font-black text-blue-500 opacity-0 group-hover:opacity-100 uppercase transition-all">Go to Duty</button>
                            </div>
                         </div>
@@ -1668,7 +1668,7 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                 </section>
               </div>
 
-              <div className="p-6 border-t border-white/5 bg-black/40 flex gap-4">
+              <div className="p-6 border-t border-[var(--theme-border)] bg-[var(--theme-status)] flex gap-4">
                  {!isGuest && (
                    <>
                      <button 
@@ -1706,29 +1706,29 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
               initial={{ scale: 0.95, opacity: 0, y: 10 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.95, opacity: 0, y: 10 }}
-              className="relative w-full max-w-sm bg-[#16161a] border border-white/10 rounded-2xl shadow-2xl p-6 overflow-hidden"
+              className="relative w-full max-w-sm bg-[var(--theme-card)] border border-[var(--theme-border)] rounded-2xl shadow-2xl p-6 overflow-hidden"
             >
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-bold text-white uppercase tracking-widest flex items-center gap-3">
+                <h3 className="text-lg font-bold text-[var(--theme-text)] uppercase tracking-widest flex items-center gap-3">
                   <FileDown size={18} className="text-blue-500" />
                   PDF Export Options
                 </h3>
-                <button onClick={() => setIsExportSettingsOpen(false)} className="p-2 text-slate-500 hover:text-white transition-colors">
+                <button onClick={() => setIsExportSettingsOpen(false)} className="p-2 text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] transition-colors">
                   <X size={20} />
                 </button>
               </div>
 
               <div className="space-y-6">
                 <div className="space-y-2">
-                  <label className="text-[10px] text-slate-500 uppercase font-bold px-1">Select Export Period</label>
+                  <label className="text-[10px] text-[var(--theme-text-muted)] uppercase font-bold px-1">Select Export Period</label>
                   <div className="grid grid-cols-2 gap-3">
                     <select 
                       value={exportMonth}
                       onChange={(e) => setExportMonth(parseInt(e.target.value))}
-                      className="bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs font-black text-white uppercase tracking-widest focus:outline-none focus:border-blue-500"
+                      className="bg-[var(--theme-status)] border border-[var(--theme-border)] rounded-xl px-4 py-2.5 text-xs font-black text-[var(--theme-text)] uppercase tracking-widest focus:outline-none focus:border-blue-500"
                     >
                       {Array.from({ length: 12 }).map((_, i) => (
-                        <option key={i} value={i}>
+                        <option key={i} value={i} className="bg-[var(--theme-container)]">
                           {new Date(2000, i).toLocaleString('default', { month: 'long' })}
                         </option>
                       ))}
@@ -1736,10 +1736,10 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                     <select 
                       value={exportYear}
                       onChange={(e) => setExportYear(parseInt(e.target.value))}
-                      className="bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs font-black text-white uppercase tracking-widest focus:outline-none focus:border-blue-500"
+                      className="bg-[var(--theme-status)] border border-[var(--theme-border)] rounded-xl px-4 py-2.5 text-xs font-black text-[var(--theme-text)] uppercase tracking-widest focus:outline-none focus:border-blue-500"
                     >
                       {[2024, 2025, 2026, 2027].map(y => (
-                        <option key={y} value={y}>{y}</option>
+                        <option key={y} value={y} className="bg-[var(--theme-container)]">{y}</option>
                       ))}
                     </select>
                   </div>
