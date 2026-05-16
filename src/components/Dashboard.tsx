@@ -484,7 +484,7 @@ export function Dashboard({ isGuest }: DashboardProps) {
     'Received': '#10b981',
     'Requested': '#6366f1',
     'Need Action': '#ef4444',
-    'Pending': '#64748b',
+    'Pending': '#f59e0b',
   };
 
   const uniqueGroups = useMemo(() => [...new Set(personnel.map(p => p.rosterGroup).filter(Boolean))].sort(), [personnel]);
@@ -730,20 +730,20 @@ export function Dashboard({ isGuest }: DashboardProps) {
         animate={{ opacity: 1, y: 0 }}
         className="space-y-4"
       >
-        <div className="flex items-center justify-between px-2">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-2 gap-4">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl flex items-center justify-center border shadow-sm transition-transform hover:rotate-6" style={{ backgroundColor: 'var(--theme-status)', borderColor: 'var(--theme-border)', color: 'var(--theme-accent)' }}>
-              <Globe size={24} />
+            <div className="w-10 h-10 md:w-12 md:h-12 rounded-2xl flex items-center justify-center border shadow-sm transition-transform hover:rotate-6 shrink-0" style={{ backgroundColor: 'var(--theme-status)', borderColor: 'var(--theme-border)', color: 'var(--theme-accent)' }}>
+              <Globe size={20} md={24} />
             </div>
             <div>
-              <h2 className="text-[14px] font-black text-[var(--theme-text)] uppercase tracking-[0.2em]">Live Tactical Deployment</h2>
-              <p className="text-[10px] text-[var(--theme-text-muted)] uppercase font-bold tracking-widest">Real-time personnel telemetry across MLN & Hassi Messaoud</p>
+              <h2 className="text-[12px] md:text-[14px] font-black text-[var(--theme-text)] uppercase tracking-[0.2em]">Live Tactical Deployment</h2>
+              <p className="text-[8px] md:text-[10px] text-[var(--theme-text-muted)] uppercase font-bold tracking-widest leading-tight">Personnel telemetry across MLN & Hassi Messaoud</p>
             </div>
           </div>
-          <div className="flex items-center gap-5 bg-[var(--theme-card)] border border-[var(--theme-border)] rounded-full px-6 py-2 shadow-sm">
+          <div className="flex items-center gap-3 md:gap-5 bg-[var(--theme-card)] border border-[var(--theme-border)] rounded-full px-4 md:px-6 py-2 shadow-sm w-fit">
              <div className="flex items-center gap-2">
-                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.3)]"></div>
-                <span className="text-[9px] font-black text-[var(--theme-text-muted)] uppercase tracking-widest">Secure Mesh Active</span>
+                <div className="w-2 md:w-2.5 h-2 md:h-2.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.3)]"></div>
+                <span className="text-[8px] md:text-[9px] font-black text-[var(--theme-text-muted)] uppercase tracking-widest">Secure Mesh Active</span>
              </div>
           </div>
         </div>
@@ -1050,14 +1050,15 @@ export function Dashboard({ isGuest }: DashboardProps) {
                 <p className="text-[9px] md:text-[10px] text-[var(--theme-text-muted)] uppercase font-black tracking-widest">Personnel Deployment vs Cumulative Workflow (12h Benchmark)</p>
               </div>
               
-              <div className="flex flex-wrap items-center gap-3 md:gap-4 w-full sm:w-auto">
+              <div className="flex flex-wrap items-center gap-2 md:gap-4 w-full sm:w-auto">
                 {/* Group Filter */}
-                <div className="flex items-center gap-3 px-4 py-2 bg-[var(--theme-status)] border border-[var(--theme-border)] rounded-xl group/filter hover:bg-[var(--theme-card)] hover:shadow-lg transition-all shadow-sm flex-1 sm:flex-none">
-                  <span className="text-[9px] md:text-[10px] font-black text-[var(--theme-text-muted)] uppercase tracking-widest">Filter:</span>
+                <div className="relative flex items-center justify-center w-10 h-10 md:w-auto md:h-auto md:px-4 py-2 bg-[var(--theme-status)] border border-[var(--theme-border)] rounded-xl group/filter hover:bg-[var(--theme-card)] hover:shadow-lg transition-all shadow-sm flex-none">
+                  <span className="hidden md:block text-[9px] md:text-[10px] font-black text-[var(--theme-text-muted)] uppercase tracking-widest mr-2">Filter:</span>
+                  <Filter size={12} className="md:hidden text-[var(--theme-text-muted)]" />
                   <select 
                     value={selectedGroup} 
                     onChange={(e) => setSelectedGroup(e.target.value)}
-                    className="bg-transparent text-[10px] md:text-[11px] font-black text-[var(--theme-text)] focus:outline-none uppercase cursor-pointer w-full"
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer md:relative md:opacity-100 md:bg-transparent md:text-[10px] md:text-[11px] md:font-black md:text-[var(--theme-text)] md:focus:outline-none md:uppercase md:w-auto"
                   >
                     <option value="ALL">All Groups</option>
                     {uniqueGroups.map(g => <option key={g} value={g} className="bg-white">{g}</option>)}
@@ -1218,17 +1219,16 @@ export function Dashboard({ isGuest }: DashboardProps) {
               )}
             </div>
             
-            {/* Legend / Stats overlay - Repositioned to top-right to avoid overlap */}
-            <div className="absolute top-[100px] right-8 flex flex-col gap-3 pointer-events-none z-20">
-              <div className="bg-white/80 backdrop-blur-xl border border-slate-100 p-6 rounded-3xl text-right flex flex-col gap-4 shadow-[0_20px_50px_rgba(0,0,0,0.05)]">
-                <div>
+            {/* Legend / Stats overlay - Repositioned for mobile friendliness */}
+            <div className="md:absolute top-[100px] right-8 flex flex-col gap-3 pointer-events-none z-20 mt-6 md:mt-0">
+              <div className="bg-white/80 backdrop-blur-xl border border-slate-100 p-4 md:p-6 rounded-3xl text-left md:text-right flex flex-row md:flex-col gap-6 md:gap-4 shadow-[0_20px_50px_rgba(0,0,0,0.05)] pointer-events-auto">
+                <div className="flex-1 md:flex-none">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Period Total</p>
-                  <p className="text-3xl font-mono font-black text-[#0F172A]">{laborAnalytics.totalHours.toLocaleString()}<span className="text-[10px] text-blue-600 ml-1">HRS</span></p>
+                  <p className="text-2xl md:text-3xl font-mono font-black text-[#0F172A]">{laborAnalytics.totalHours.toLocaleString()}<span className="text-[10px] text-blue-600 ml-1">HRS</span></p>
                 </div>
-                <div className="pt-4 border-t border-slate-50">
+                <div className="pt-0 md:pt-4 border-l md:border-l-0 md:border-t border-slate-100 md:border-slate-50 pl-6 md:pl-0 flex-1 md:flex-none">
                   <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Year-to-Date</p>
                   <p className="text-xl font-mono font-black text-emerald-700">{laborAnalytics.ytdHours.toLocaleString()}<span className="text-[10px] text-emerald-500 ml-1">HRS</span></p>
-                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-2">{new Date().getFullYear()} Core Working Hours</p>
                 </div>
               </div>
             </div>
@@ -1528,50 +1528,50 @@ export function Dashboard({ isGuest }: DashboardProps) {
             </div>
           </div>
           
-          <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
+          <div className="flex flex-wrap items-center gap-2 md:gap-3 w-full xl:w-auto">
              {/* Search/Filter Controls */}
-             <div className="flex items-center gap-2 px-3 md:px-4 py-2 bg-[var(--theme-card)] border border-[var(--theme-border)] rounded-xl text-[10px] shadow-sm flex-1 md:flex-none">
+             <div className="relative flex items-center justify-center w-10 h-10 md:w-auto md:h-auto md:px-4 py-2 bg-[var(--theme-card)] border border-[var(--theme-border)] rounded-xl text-[10px] shadow-sm flex-none">
                 <Users size={12} className="text-[var(--theme-text-muted)]" />
                 <select 
                   value={summaryGroup} 
                   onChange={(e) => setSummaryGroup(e.target.value)}
-                  className="bg-transparent text-[var(--theme-text)] focus:outline-none uppercase font-black tracking-tight w-full"
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer md:relative md:opacity-100 md:bg-transparent md:text-[var(--theme-text)] md:focus:outline-none md:uppercase md:font-black md:tracking-tight md:ml-2 md:w-auto"
                 >
                   <option value="ALL">All Groups</option>
                   {uniqueGroups.map(g => <option key={g} value={g}>{g}</option>)}
                 </select>
              </div>
 
-             <div className="flex items-center gap-2 px-3 md:px-4 py-2 bg-[var(--theme-card)] border border-[var(--theme-border)] rounded-xl text-[10px] shadow-sm flex-1 md:flex-none">
+             <div className="relative flex items-center justify-center w-10 h-10 md:w-auto md:h-auto md:px-4 py-2 bg-[var(--theme-card)] border border-[var(--theme-border)] rounded-xl text-[10px] shadow-sm flex-none">
                 <Users size={12} className="text-[var(--theme-text-muted)]" />
                 <select 
                   value={summaryPersonnel} 
                   onChange={(e) => setSummaryPersonnel(e.target.value)}
-                  className="bg-transparent text-[var(--theme-text)] focus:outline-none uppercase font-black tracking-tight w-full"
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer md:relative md:opacity-100 md:bg-transparent md:text-[var(--theme-text)] md:focus:outline-none md:uppercase md:font-black md:tracking-tight md:ml-2 md:w-auto"
                 >
                   <option value="ALL">All Staff</option>
                   {personnel.sort((a,b) => a.fullName.localeCompare(b.fullName)).map(p => <option key={p.id} value={p.id}>{p.fullName}</option>)}
                 </select>
              </div>
 
-             <div className="flex items-center gap-2 px-3 md:px-4 py-2 bg-[var(--theme-card)] border border-[var(--theme-border)] rounded-xl text-[10px] shadow-sm flex-1 md:flex-none">
+             <div className="relative flex items-center justify-center w-10 h-10 md:w-auto md:h-auto md:px-4 py-2 bg-[var(--theme-card)] border border-[var(--theme-border)] rounded-xl text-[10px] shadow-sm flex-none">
                 <Calendar size={12} className="text-[var(--theme-text-muted)]" />
                 <select 
                   value={summaryMonth} 
                   onChange={(e) => setSummaryMonth(e.target.value)}
-                  className="bg-transparent text-[var(--theme-text)] focus:outline-none uppercase font-black tracking-tight w-full"
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer md:relative md:opacity-100 md:bg-transparent md:text-[var(--theme-text)] md:focus:outline-none md:uppercase md:font-black md:tracking-tight md:ml-2 md:w-auto"
                 >
                   <option value="ALL">All Months</option>
                   {availableMonths.map(m => <option key={m} value={m}>{formatPeriod(m)}</option>)}
                 </select>
              </div>
 
-             <div className="flex items-center gap-2 px-3 md:px-4 py-2 bg-[var(--theme-card)] border border-[var(--theme-border)] rounded-xl text-[10px] shadow-sm flex-1 md:flex-none">
+             <div className="relative flex items-center justify-center w-10 h-10 md:w-auto md:h-auto md:px-4 py-2 bg-[var(--theme-card)] border border-[var(--theme-border)] rounded-xl text-[10px] shadow-sm flex-none">
                 <Activity size={12} className="text-[var(--theme-text-muted)]" />
                 <select 
                   value={summaryStatus} 
                   onChange={(e) => setSummaryStatus(e.target.value)}
-                  className="bg-transparent text-[var(--theme-text)] focus:outline-none uppercase font-black tracking-tight w-full"
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer md:relative md:opacity-100 md:bg-transparent md:text-[var(--theme-text)] md:focus:outline-none md:uppercase md:font-black md:tracking-tight md:ml-2 md:w-auto"
                 >
                   <option value="ALL">All Status</option>
                   <option value="Requested">Requested</option>
@@ -1705,7 +1705,7 @@ export function Dashboard({ isGuest }: DashboardProps) {
                                  ? "bg-emerald-600 text-white border-emerald-500/20 shadow-sm"
                                  : flight.statusIDtoDZ === 'Requested'
                                    ? "bg-indigo-600 text-white border-indigo-500/20 shadow-sm"
-                                   : "bg-slate-500 text-white border-slate-400/20 shadow-sm"
+                                   : "bg-amber-500 text-white border-amber-400/20 shadow-sm"
                            )}>
                              {getStatusLabel(flight.statusIDtoDZ || 'Requested', flight.requestedDateIDtoDZ)}
                            </div>
@@ -1719,7 +1719,7 @@ export function Dashboard({ isGuest }: DashboardProps) {
                                  ? "bg-blue-600 text-white border-blue-500/20 shadow-sm"
                                  : flight.statusDZtoID === 'Requested'
                                    ? "bg-indigo-600 text-white border-indigo-500/20 shadow-sm"
-                                   : "bg-slate-500 text-white border-slate-400/20 shadow-sm"
+                                   : "bg-amber-500 text-white border-amber-400/20 shadow-sm"
                            )}>
                              {getStatusLabel(flight.statusDZtoID || 'Requested', flight.requestedDateDZtoID)}
                            </div>
@@ -1781,7 +1781,7 @@ export function Dashboard({ isGuest }: DashboardProps) {
                                      ? "bg-emerald-600 text-white border-emerald-500/20"
                                      : flight.statusIDtoDZ === 'Requested'
                                        ? "bg-blue-600 text-white border-blue-500/20"
-                                       : "bg-slate-500 text-white border-slate-400/20"
+                                       : "bg-amber-500 text-white border-amber-400/20"
                               )}>
                                  {getStatusLabel(flight.statusIDtoDZ || 'Requested', flight.requestedDateIDtoDZ)}
                               </div>
@@ -1813,7 +1813,7 @@ export function Dashboard({ isGuest }: DashboardProps) {
                                      ? "bg-blue-600 text-white border-blue-100"
                                      : flight.statusDZtoID === 'Requested'
                                        ? "bg-blue-600 text-white border-blue-100"
-                                       : "bg-slate-500 text-white border-slate-100"
+                                       : "bg-amber-500 text-white border-amber-100"
                               )}>
                                  {getStatusLabel(flight.statusDZtoID || 'Requested', flight.requestedDateDZtoID)}
                               </div>

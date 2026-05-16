@@ -19,7 +19,7 @@ export function Settings({ user, isGuest, onLogout }: SettingsProps) {
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
   const [isInviting, setIsInviting] = useState(false);
   const [inviteSuccess, setInviteSuccess] = useState(false);
-  const [currentTheme, setCurrentTheme] = useState(() => localStorage.getItem('app-theme') || 'corporate');
+  const [currentTheme, setCurrentTheme] = useState(() => localStorage.getItem('app-theme') || 'bright-modern');
   const [collaborators, setCollaborators] = useState<any[]>([]);
 
   useEffect(() => {

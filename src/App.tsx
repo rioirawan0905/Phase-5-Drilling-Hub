@@ -26,7 +26,7 @@ export default function App() {
     }, 1000);
 
     // Initialize Theme
-    const savedTheme = localStorage.getItem('app-theme') || 'corporate';
+    const savedTheme = localStorage.getItem('app-theme') || 'bright-modern';
     document.documentElement.setAttribute('data-theme', savedTheme);
     
     return () => clearInterval(timer);
