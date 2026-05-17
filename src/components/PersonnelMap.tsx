@@ -78,18 +78,20 @@ export function PersonnelMap({ onDutyPersonnel }: PersonnelMapProps) {
       <div className="absolute bottom-[20%] left-[10%] w-[15%] h-[25%] bg-blue-400/30 rounded-full blur-[110px] pointer-events-none z-0" />
 
       {/* Sidebar - Personnel List Overlay (Digital Tactical Glass) */}
-      <div className="absolute left-6 top-6 bottom-6 w-64 md:w-80 b-6 z-[1000] hidden md:flex flex-col border border-white/60 bg-white/50 backdrop-blur-[40px] rounded-2xl overflow-hidden shadow-[0_32px_64px_-16px_rgba(0,0,0,0.5)] ring-1 ring-inset ring-white/50">
-        {/* Specular Highlight Overlay */}
-        <div className="absolute inset-0 pointer-events-none bg-gradient-to-tr from-white/20 via-white/10 to-white/0" />
+      <div className="absolute left-6 top-6 bottom-6 w-64 md:w-80 z-[1000] hidden md:flex flex-col border border-white/40 bg-white/30 backdrop-blur-[60px] rounded-2xl overflow-hidden shadow-[0_32px_64px_-16px_rgba(0,0,0,0.4)] ring-1 ring-white/50">
+        {/* Frost Texture Overlay */}
+        <div className="absolute inset-0 pointer-events-none opacity-[0.03] bg-[url('https://www.transparenttextures.com/patterns/p6.png')]" />
+        {/* Inner Glow */}
+        <div className="absolute inset-0 pointer-events-none rounded-2xl border border-white/60 shadow-[inset_0_0_20px_rgba(255,255,255,0.4)]" />
         
-        <div className="relative p-6 border-b border-black/10 bg-white/20 backdrop-blur-md">
+        <div className="relative p-6 border-b border-black/5 bg-white/10">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.4em] flex items-center gap-2">
-              <Navigation size={12} className="animate-pulse" /> Tactical Feed
+            <h3 className="text-[10px] font-black text-black uppercase tracking-[0.4em] flex items-center gap-2">
+              <Navigation size={12} className="animate-pulse" /> Tactical Entry
             </h3>
-            <span className="text-[8px] font-black text-black/40 uppercase tracking-widest px-1.5 py-0.5 border border-black/10 rounded">LIVE</span>
+            <span className="text-[8px] font-black text-black uppercase tracking-widest px-2 py-0.5 border border-black/20 rounded-md bg-black/5">LIVE</span>
           </div>
-          <p className="text-[14px] text-black font-black uppercase tracking-tight leading-none">Real Time On Duty Personnel Location</p>
+          <p className="text-[14px] text-black font-black uppercase tracking-tight leading-tight">Real Time On Duty Personnel Location</p>
         </div>
         
         <div className="relative flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3">
@@ -115,23 +117,23 @@ export function PersonnelMap({ onDutyPersonnel }: PersonnelMapProps) {
                 <div className={cn(
                   "w-10 h-10 rounded-lg flex items-center justify-center shrink-0 shadow-sm border transition-all duration-300 group-hover:scale-110",
                   isTrackable 
-                    ? "bg-white/60 text-emerald-600 border-white/80" 
+                    ? "bg-black/5 text-black border-black/5" 
                     : "bg-black/5 text-black/20 border-black/5"
                 )}>
                   <User size={20} className={cn(selectedPersonnel?.id === p.id && "animate-pulse")} />
                 </div>
                 
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-1">
-                    <p className="text-[12px] font-black text-black truncate uppercase tracking-tight leading-none">{p.fullName}</p>
+                  <div className="flex items-center justify-between gap-1 leading-none">
+                    <p className="text-[13px] font-black text-black truncate uppercase tracking-tight">{p.fullName}</p>
                     {isTrackable && (
                       <span className="flex h-2 w-2 relative">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-black opacity-40"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-black"></span>
                       </span>
                     )}
                   </div>
-                  <p className="text-[8px] text-black font-black uppercase tracking-widest mt-1.5">{p.title}</p>
+                  <p className="text-[9px] text-black font-bold uppercase tracking-widest mt-1.5 opacity-60 italic">{p.title}</p>
                 </div>
               </button>
             );

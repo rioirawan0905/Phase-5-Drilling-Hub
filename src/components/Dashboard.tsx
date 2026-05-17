@@ -3,7 +3,7 @@ import { collection, onSnapshot, query } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { FlightRequest, Personnel, Scheduling, HubEvent } from '../types';
 import { PieChart, Pie, Tooltip as RechartsTooltip, ResponsiveContainer, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, AreaChart, Area, LabelList } from 'recharts';
-import { Users, Plane, Activity, CheckCircle2, AlertCircle, Clock, Filter, Calendar, Briefcase, LayoutGrid, ArrowRight, ArrowLeft, Download, Info, Globe, Sun, Cloud, CloudRain, CloudSnow, CloudLightning, CloudDrizzle, CloudFog, Wind, Tag, Palmtree, Wrench, Copy, Check, X } from 'lucide-react';
+import { Users, Plane, Activity, CheckCircle2, AlertCircle, Clock, Filter, Calendar, Briefcase, LayoutGrid, ArrowRight, ArrowLeft, ArrowUp, ArrowDown, Download, Info, Globe, Sun, Cloud, CloudRain, CloudSnow, CloudLightning, CloudDrizzle, CloudFog, Wind, Tag, Palmtree, Wrench, Copy, Check, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn, formatDate } from '../lib/utils';
 import * as XLSX from 'xlsx';
@@ -24,6 +24,8 @@ const toDate = (d: any) => {
   return new Date(d);
 };
 
+const sanitizeId = (id: string) => id.replace(/[^a-z0-9]/gi, '_');
+
 // Helper for status resolution used in both stats and rendering
 const getEffectiveStatus = (status: string, requestedDate?: string | null) => {
   if (status === 'Received') return "Received";
@@ -34,6 +36,8 @@ const getEffectiveStatus = (status: string, requestedDate?: string | null) => {
     const today = new Date();
     const diffTime = flightDate.getTime() - today.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays <= 0 && status !== 'Received') return "OVERDUE";
     if (diffDays <= 14) isUrgent = true;
   }
 
@@ -82,6 +86,19 @@ export function Dashboard({ isGuest }: DashboardProps) {
   const [summaryPersonnel, setSummaryPersonnel] = useState<string>('ALL');
   const [summaryMonth, setSummaryMonth] = useState<string>('ALL');
   const [summaryStatus, setSummaryStatus] = useState<string>('ALL');
+  const [laborProfileTab, setLaborProfileTab] = useState<'individual' | 'monthly' | 'work-hours'>('individual');
+
+  const uniqueGroups = useMemo(() => [...new Set(personnel.map(p => p.rosterGroup).filter(Boolean))].sort(), [personnel]);
+  const availableMonths = useMemo(() => {
+    const months = new Set<string>();
+    schedules.forEach(s => {
+      const start = toDate(s.startDate);
+      const end = toDate(s.endDate);
+      if (start && !isNaN(start.getTime())) months.add(start.toISOString().substring(0, 7));
+      if (end && !isNaN(end.getTime())) months.add(end.toISOString().substring(0, 7));
+    });
+    return Array.from(months).sort().reverse();
+  }, [schedules]);
 
   // Helper for weather icons
   const getWeatherIcon = (desc: string = '') => {
@@ -278,9 +295,10 @@ export function Dashboard({ isGuest }: DashboardProps) {
         { name: 'To Indonesia', value: toIndo }
       ]);
 
-      setStatusData(Object.entries(statCounts)
-        .filter(([_, value]) => value > 0)
-        .map(([name, value]) => ({ name, value })));
+      setStatusData(['Requested', 'Received', 'Pending', 'Need Action'].map(name => ({
+        name,
+        value: statCounts[name] || 0
+      })));
     });
 
     const eventsUnsub = onSnapshot(collection(db, 'events'), (snap) => {
@@ -314,7 +332,7 @@ export function Dashboard({ isGuest }: DashboardProps) {
 
     if (isUrgent) return "text-rose-500 bg-rose-500/10 border-rose-500/20 animate-pulse font-bold";
 
-    if (status === 'Not Requested') return "text-amber-500 bg-amber-500/10 border-amber-500/20"; // Pending
+    if (status === 'Not Requested') return "text-orange-500 bg-orange-500/10 border-orange-500/20"; // Pending
     if (status === 'Requested') return "text-blue-400 bg-blue-500/10 border-blue-500/20";
     return "text-indigo-400 bg-indigo-500/5 border-indigo-500/10";
   };
@@ -424,7 +442,64 @@ export function Dashboard({ isGuest }: DashboardProps) {
       totalHoursCount += hours;
     });
 
-    // 5. Construct chart data
+    // 5. Monthly Trends Calculation (independent of individual filters but respects general data)
+    const monthlyGroupDataMap: Record<string, Record<string, number>> = {};
+    const monthsForTrends: string[] = [];
+    
+    // Start from Jan 2026
+    const trendStart = new Date("2026-01-01");
+    trendStart.setHours(0,0,0,0);
+    const trendEnd = new Date();
+    // Add some future months if needed, but for now let's show up to current month or more
+    // User said "start the x-axis from Jan 2026"
+    
+    let currentTrendDate = new Date(trendStart);
+    while (currentTrendDate <= trendEnd || monthsForTrends.length < 6) {
+      monthsForTrends.push(currentTrendDate.toISOString().substring(0, 7));
+      currentTrendDate.setMonth(currentTrendDate.getMonth() + 1);
+      if (monthsForTrends.length > 24) break; // Safety
+    }
+
+    // Sum hours for FILTERED personnel in each month to show trends for current selection
+    schedules.filter(s => {
+      const status = (s.status || '').toString().toUpperCase();
+      const isActive = status === 'ON_DUTY' || status === 'ON-DUTY';
+      return isActive && (selectedPersonnel === 'ALL' || s.personnelId === selectedPersonnel) && (selectedGroup === 'ALL' || personnel.find(p => p.id === s.personnelId)?.rosterGroup === selectedGroup);
+    }).forEach(s => {
+      const start = toDate(s.startDate);
+      const end = toDate(s.endDate);
+      const person = personnel.find(p => p.id === s.personnelId);
+      const group = person?.rosterGroup || 'Unknown';
+      if (!start || !end) return;
+
+      monthsForTrends.forEach(m => {
+        const mStart = new Date(m + "-01");
+        mStart.setHours(0,0,0,0);
+        const mEnd = new Date(mStart.getFullYear(), mStart.getMonth() + 1, 0);
+        mEnd.setHours(23,59,59,999);
+
+        const intersectionStart = start > mStart ? start : mStart;
+        const intersectionEnd = end < mEnd ? end : mEnd;
+
+        if (intersectionStart <= intersectionEnd) {
+          const diffDays = Math.floor((intersectionEnd.getTime() - intersectionStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+          if (!monthlyGroupDataMap[m]) monthlyGroupDataMap[m] = {};
+          monthlyGroupDataMap[m][group] = (monthlyGroupDataMap[m][group] || 0) + (diffDays * 12);
+        }
+      });
+    });
+
+    const monthlyTrends = monthsForTrends.map(m => {
+      const data: any = { month: formatPeriod(m) };
+      uniqueGroups.forEach(g => {
+        data[g] = monthlyGroupDataMap[m]?.[g] || 0;
+      });
+      // also keep total for tooltip
+      data.total = Object.values(monthlyGroupDataMap[m] || {}).reduce((a, b) => a + b, 0);
+      return data;
+    });
+
+    // 6. Construct chart data
     const chartData = filteredPersonnel
       .map(p => ({
         id: p.id,
@@ -435,11 +510,13 @@ export function Dashboard({ isGuest }: DashboardProps) {
       .filter(item => item.hours > 0)
       .sort((a, b) => b.hours - a.hours);
 
-    return { totalHours: totalHoursCount, chartData, mtdHours: mtdHoursCount, ytdHours: ytdHoursCount };
+    return { totalHours: totalHoursCount, chartData, mtdHours: mtdHoursCount, ytdHours: ytdHoursCount, monthlyTrends };
   }, [schedules, personnel, selectedPersonnel, selectedGroup, selectedPeriods]);
 
+  const [summarySort, setSummarySort] = useState<{ key: string, direction: 'asc' | 'desc' }>({ key: 'date', direction: 'asc' });
+
   const filteredSummaryFlights = useMemo(() => {
-    return allFlights.filter(f => {
+    let result = allFlights.filter(f => {
       const p = personnel.find(person => person.id === f.personnelId);
       if (!p) return false;
       
@@ -456,16 +533,33 @@ export function Dashboard({ isGuest }: DashboardProps) {
         if (s1 !== summaryStatus && s2 !== summaryStatus) return false;
       }
       return true;
-    }).sort((a, b) => {
+    });
+
+    result = result.sort((a, b) => {
       const getEarliest = (f: FlightRequest) => {
         const dates = [f.requestedDateDZtoID, f.requestedDateIDtoDZ]
           .filter(Boolean)
           .map(d => new Date(d!).getTime());
         return dates.length > 0 ? Math.min(...dates) : Infinity;
       };
-      return getEarliest(a) - getEarliest(b);
+
+      const personA = personnel.find(p => p.id === a.personnelId);
+      const personB = personnel.find(p => p.id === b.personnelId);
+
+      let comparison = 0;
+      if (summarySort.key === 'personnel') {
+        comparison = (personA?.fullName || '').localeCompare(personB?.fullName || '');
+      } else if (summarySort.key === 'duty') {
+        comparison = (a.startDate || '').localeCompare(b.startDate || '');
+      } else {
+        comparison = getEarliest(a) - getEarliest(b);
+      }
+
+      return summarySort.direction === 'asc' ? comparison : -comparison;
     });
-  }, [allFlights, personnel, summaryGroup, summaryPersonnel, summaryMonth, summaryStatus]);
+
+    return result;
+  }, [allFlights, personnel, summaryGroup, summaryPersonnel, summaryMonth, summaryStatus, summarySort]);
 
   const groupColorMap: Record<string, string> = {
     'A': '#3b82f6',
@@ -482,22 +576,12 @@ export function Dashboard({ isGuest }: DashboardProps) {
 
   const statusColorMap: Record<string, string> = {
     'Received': '#10b981',
+    'COMPLETED': '#10b981',
     'Requested': '#6366f1',
     'Need Action': '#ef4444',
-    'Pending': '#f59e0b',
+    'OVERDUE': '#ef4444',
+    'Pending': '#f97316',
   };
-
-  const uniqueGroups = useMemo(() => [...new Set(personnel.map(p => p.rosterGroup).filter(Boolean))].sort(), [personnel]);
-  const availableMonths = useMemo(() => {
-    const months = new Set<string>();
-    schedules.forEach(s => {
-      const start = toDate(s.startDate);
-      const end = toDate(s.endDate);
-      if (start && !isNaN(start.getTime())) months.add(start.toISOString().substring(0, 7));
-      if (end && !isNaN(end.getTime())) months.add(end.toISOString().substring(0, 7));
-    });
-    return Array.from(months).sort().reverse();
-  }, [schedules]);
 
   const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444'];
 
@@ -717,7 +801,7 @@ export function Dashboard({ isGuest }: DashboardProps) {
             </div>
             
             <div className="flex items-center gap-3 pt-6 border-t border-slate-50">
-              <div className={cn("w-2 h-2 rounded-full animate-pulse", item.color === 'text-blue-600' ? "bg-blue-600" : "bg-emerald-500")}></div>
+              <div className={cn("w-2 h-2 rounded-full animate-pulse", item.color === 'text-blue-600' ? "bg-blue-600" : "bg-green-500")}></div>
               <span className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">{item.sub}</span>
             </div>
           </motion.div>
@@ -742,7 +826,7 @@ export function Dashboard({ isGuest }: DashboardProps) {
           </div>
           <div className="flex items-center gap-3 md:gap-5 bg-[var(--theme-card)] border border-[var(--theme-border)] rounded-full px-4 md:px-6 py-2 shadow-sm w-fit">
              <div className="flex items-center gap-2">
-                <div className="w-2 md:w-2.5 h-2 md:h-2.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.3)]"></div>
+                <div className="w-2 md:w-2.5 h-2 md:h-2.5 rounded-full bg-green-500 animate-pulse shadow-[0_0_10px_rgba(34,197,94,0.3)]"></div>
                 <span className="text-[8px] md:text-[9px] font-black text-[var(--theme-text-muted)] uppercase tracking-widest">Secure Mesh Active</span>
              </div>
           </div>
@@ -809,8 +893,8 @@ export function Dashboard({ isGuest }: DashboardProps) {
                         </p>
                         {getDaysUntil(ev.startDate) <= 0 && getDaysUntil(ev.endDate) >= 0 && (
                           <div className="flex items-center gap-1.5">
-                            <span className="block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                            <span className="text-[9px] font-black text-emerald-600 uppercase">Current</span>
+                            <span className="block w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                            <span className="text-[9px] font-black text-green-600 uppercase">Current</span>
                           </div>
                         )}
                       </div>
@@ -846,7 +930,7 @@ export function Dashboard({ isGuest }: DashboardProps) {
         </div>
         {/* Fleet Matrix & Analytics Pulse */}
         <div className="lg:col-span-3 flex flex-col gap-6">
-          <div className="theme-container overflow-hidden p-0 flex flex-col xl:flex-row bg-white min-h-[350px] shadow-sm">
+          <div className="theme-container overflow-visible p-0 flex flex-col xl:flex-row bg-white min-h-[350px] shadow-sm">
             {/* Left: Rotation Matrix (Compact Width) */}
             <div className="w-full xl:w-[40%] p-6 border-b xl:border-b-0 xl:border-r border-slate-100 bg-slate-50/30 flex flex-col">
               <div className="flex items-center justify-between mb-6">
@@ -878,29 +962,62 @@ export function Dashboard({ isGuest }: DashboardProps) {
                   const colorClass = status === 'ON_DUTY' ? 'emerald' : status === 'IN_TRANSIT' ? 'blue' : 'slate';
 
                   return (
-                    <div key={group} className={cn("p-4 rounded-2xl border transition-all hover:shadow-xl hover:shadow-slate-200/50 hover:bg-white cursor-pointer group", 
-                      status === 'ON_DUTY' ? "bg-emerald-50 border-emerald-100" : status === 'IN_TRANSIT' ? "bg-blue-50 border-blue-100" : "bg-slate-50 border-slate-100"
-                    )}>
-                      <div className="flex justify-between items-center mb-3">
-                        <span className="text-[13px] font-black text-[#0F172A] group-hover:text-blue-600 transition-colors">{group.startsWith('Group') ? group : `Group ${group}`}</span>
-                        <div className={cn("w-2 h-2 rounded-full", 
-                          status === 'ON_DUTY' ? "bg-emerald-500" : status === 'IN_TRANSIT' ? "bg-blue-500" : "bg-slate-300"
-                        )}></div>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <div className="flex -space-x-2">
-                          {members.slice(0, 3).map((p, i) => (
-                            <div key={p.id} className="w-8 h-8 rounded-full border-2 border-white bg-slate-100 flex items-center justify-center text-[10px] text-slate-800 font-black uppercase ring-2 ring-slate-50/50">
-                              {p.fullName.charAt(0)}
-                            </div>
-                          ))}
-                          {members.length > 3 && (
-                            <div className="w-8 h-8 rounded-full border-2 border-white bg-blue-600 flex items-center justify-center text-[10px] text-white font-black uppercase ring-2 ring-slate-50/50">
-                              +{members.length - 3}
-                            </div>
-                          )}
+                    <div key={group} className="group/rotation relative">
+                      <div className={cn("p-4 rounded-2xl border transition-all hover:shadow-xl hover:shadow-slate-200/50 hover:bg-white cursor-pointer", 
+                        status === 'ON_DUTY' ? "bg-emerald-50 border-emerald-100" : status === 'IN_TRANSIT' ? "bg-blue-50 border-blue-100" : "bg-slate-50 border-slate-100"
+                      )}>
+                        <div className="flex justify-between items-center mb-3">
+                          <span className="text-[13px] font-black text-[#0F172A] group-hover:text-blue-600 transition-colors">{group.startsWith('Group') ? group : `Group ${group}`}</span>
+                          <div className={cn("w-2 h-2 rounded-full", 
+                            status === 'ON_DUTY' ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" : status === 'IN_TRANSIT' ? "bg-blue-500" : "bg-slate-300"
+                          )}></div>
                         </div>
-                        <span className="text-[11px] font-mono font-black text-slate-400">{members.length} PAX</span>
+                        <div className="flex items-center justify-between">
+                          <div className="flex -space-x-2">
+                            {members.slice(0, 3).map((p, i) => (
+                              <div key={p.id} className="w-8 h-8 rounded-full border-2 border-white bg-slate-100 flex items-center justify-center text-[10px] text-slate-800 font-black uppercase ring-2 ring-slate-50/50">
+                                {p.fullName.charAt(0)}
+                              </div>
+                            ))}
+                            {members.length > 3 && (
+                              <div className="w-8 h-8 rounded-full border-2 border-white bg-blue-600 flex items-center justify-center text-[10px] text-white font-black uppercase ring-2 ring-slate-50/50">
+                                +{members.length - 3}
+                              </div>
+                            )}
+                          </div>
+                          <span className="text-[11px] font-mono font-black text-slate-400">{members.length} PAX</span>
+                        </div>
+                      </div>
+
+                      {/* Tooltip */}
+                      <div className="absolute left-1/2 -translate-x-1/2 bottom-[calc(100%+8px)] w-64 bg-white border border-slate-100 p-4 rounded-2xl shadow-2xl opacity-0 group-hover/rotation:opacity-100 invisible group-hover/rotation:visible transition-all z-50 pointer-events-none">
+                        <div className="flex items-center justify-between mb-3 border-b border-slate-50 pb-2">
+                          <p className="text-[10px] font-black text-[#0F172A] uppercase tracking-widest">{group} Manifest</p>
+                          <span className="text-[9px] font-mono font-black text-blue-600">{members.length} Total</span>
+                        </div>
+                        <div className="space-y-3 max-h-48 overflow-y-auto custom-scrollbar pr-2">
+                          {members.map(m => {
+                            const mSched = schedules.find(s => {
+                              const start = toDate(s.startDate);
+                              const end = toDate(s.endDate);
+                              return m.id === s.personnelId && 
+                                     new Date().setHours(0,0,0,0) >= (start?.setHours(0,0,0,0) || 0) && 
+                                     new Date().setHours(0,0,0,0) <= (end?.setHours(0,0,0,0) || 0);
+                            });
+                            return (
+                              <div key={m.id} className="flex items-center justify-between">
+                                <span className="text-[10px] font-black text-slate-700 truncate max-w-[120px]">{m.fullName}</span>
+                                <span className={cn(
+                                  "text-[8px] font-black uppercase tracking-tighter",
+                                  mSched?.status === 'ON_DUTY' ? "text-green-600" :
+                                  mSched?.status === 'TRANSIT' ? "text-blue-600" : "text-slate-400"
+                                )}>
+                                  {mSched?.status || 'OFF DUTY'}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
                     </div>
                   );
@@ -1008,7 +1125,7 @@ export function Dashboard({ isGuest }: DashboardProps) {
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-baseline gap-3">
+                  <div className="flex items-baseline gap-3 mb-2">
                     <span className={cn(
                       "text-3xl font-mono font-black tabular-nums tracking-tighter",
                       stats.healthCategory === 'Optimal' ? "text-blue-700" : 
@@ -1021,8 +1138,14 @@ export function Dashboard({ isGuest }: DashboardProps) {
                       stats.healthCategory === 'Optimal' ? "text-blue-500" : 
                       stats.healthCategory === 'Suboptimal' ? "text-amber-500" : "text-rose-500"
                     )}>
-                      {stats.healthCategory}
+                      MONTHLY
                     </span>
+                  </div>
+                  <div className="flex items-baseline gap-2 pt-2 border-t border-blue-100/50">
+                    <span className="text-sm font-mono font-black text-blue-600">
+                      {Math.round((allFlights.filter(f => (f.requestedDateDZtoID || f.requestedDateIDtoDZ)?.startsWith(new Date().getFullYear().toString()) && (f.statusDZtoID === 'Received' || f.statusIDtoDZ === 'Received')).length / Math.max(1, allFlights.filter(f => (f.requestedDateDZtoID || f.requestedDateIDtoDZ)?.startsWith(new Date().getFullYear().toString())).length)) * 100)}%
+                    </span>
+                    <span className="text-[8px] font-black text-blue-400 uppercase tracking-widest">YTD HEALTH</span>
                   </div>
                 </div>
               </div>
@@ -1048,6 +1171,43 @@ export function Dashboard({ isGuest }: DashboardProps) {
                   <h3 className="text-sm font-black text-[var(--theme-text)] uppercase tracking-[0.2em]">Labor Force Profile</h3>
                 </div>
                 <p className="text-[9px] md:text-[10px] text-[var(--theme-text-muted)] uppercase font-black tracking-widest">Personnel Deployment vs Cumulative Workflow (12h Benchmark)</p>
+              </div>
+
+              {/* Selection Tabs */}
+              <div className="flex bg-slate-50 p-1 rounded-2xl border border-slate-100 mb-0">
+                <button
+                  onClick={() => setLaborProfileTab('individual')}
+                  className={cn(
+                    "px-6 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all",
+                    laborProfileTab === 'individual' 
+                      ? "bg-white text-blue-600 shadow-sm border border-slate-100" 
+                      : "text-slate-400 hover:text-slate-600"
+                  )}
+                >
+                  Individual Metrics
+                </button>
+                <button
+                  onClick={() => setLaborProfileTab('monthly')}
+                  className={cn(
+                    "px-6 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all",
+                    laborProfileTab === 'monthly' 
+                      ? "bg-white text-blue-600 shadow-sm border border-slate-100" 
+                      : "text-slate-400 hover:text-slate-600"
+                  )}
+                >
+                  Monthly Trends
+                </button>
+                <button
+                  onClick={() => setLaborProfileTab('work-hours')}
+                  className={cn(
+                    "px-6 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all",
+                    laborProfileTab === 'work-hours' 
+                      ? "bg-white text-blue-600 shadow-sm border border-slate-100" 
+                      : "text-slate-400 hover:text-slate-600"
+                  )}
+                >
+                  Working Hours
+                </button>
               </div>
               
               <div className="flex flex-wrap items-center gap-2 md:gap-4 w-full sm:w-auto">
@@ -1132,105 +1292,238 @@ export function Dashboard({ isGuest }: DashboardProps) {
               </div>
             </div>
 
-            <div className="h-[450px] w-full">
-              {laborAnalytics.chartData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart 
-                    data={laborAnalytics.chartData} 
-                    margin={{ top: 20, right: 30, left: 10, bottom: 80 }}
-                    barGap={0}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
-                    <XAxis 
-                      dataKey="name" 
-                      stroke="#94A3B8" 
-                      fontSize={11} 
-                      fontWeight="900" 
-                      tickLine={false} 
-                      axisLine={false} 
-                      interval={0}
-                      angle={-45}
-                      textAnchor="end"
-                      dy={10}
-                    />
-                    <YAxis 
-                      stroke="#94A3B8" 
-                      fontSize={10} 
-                      fontWeight="900" 
-                      tickLine={false} 
-                      axisLine={false}
-                      tickFormatter={(val) => `${val}h`}
-                    />
-                    <RechartsTooltip 
-                      cursor={{ fill: '#F8FAFC' }}
-                      contentStyle={{ backgroundColor: '#fff', border: '1px solid #F1F5F9', borderRadius: '12px', fontSize: '11px', fontWeight: 900, boxShadow: '0 10px 15px -10px rgba(0,0,0,0.1)' }}
-                      content={({ active, payload }) => {
-                        if (active && payload && payload.length) {
-                          const data = payload[0].payload;
-                          return (
-                            <div className="bg-white border border-slate-100 p-4 rounded-2xl shadow-xl">
-                              <p className="text-[10px] font-black text-[#0F172A] uppercase mb-1">{data.name}</p>
-                              <div className="flex items-center gap-2 mb-2">
-                                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: groupColorMap[data.group] || '#3b82f6' }} />
-                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{data.group}</p>
-                              </div>
-                              <p className="text-[16px] font-mono font-black text-blue-600">{data.hours.toLocaleString()} HR</p>
-                              <p className="text-[8px] text-slate-400 font-bold uppercase mt-1 tracking-tighter">Verified Operational Log</p>
-                            </div>
-                          );
-                        }
-                        return null;
-                      }}
-                    />
-                    <Bar 
-                      dataKey="hours" 
-                      radius={[8, 8, 0, 0]} 
-                      animationDuration={1500}
-                    >
-                      <LabelList 
-                        dataKey="hours" 
-                        position="top" 
-                        fill="#94A3B8" 
-                        fontSize={10} 
-                        fontWeight="900"
-                        formatter={(val: number) => val.toLocaleString()}
-                      />
-                      {laborAnalytics.chartData.map((entry, index) => (
-                        <Cell 
-                          key={`cell-${index}`} 
-                          fill={groupColorMap[entry.group] || '#3b82f6'} 
-                          fillOpacity={0.9}
-                          stroke={groupColorMap[entry.group] || '#3b82f6'}
-                          strokeWidth={1}
-                        />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-full flex flex-col items-center justify-center bg-slate-50 border border-dashed border-slate-200 rounded-3xl group-hover:border-blue-500/20 transition-all">
-                  <div className="relative">
-                    <Activity size={64} className="text-slate-200 mb-4 animate-pulse" />
-                    <AlertCircle size={20} className="absolute -top-2 -right-2 text-rose-500/20" />
+            <div className="flex-1 relative">
+              {laborProfileTab !== 'individual' && (
+                <div className="absolute top-4 right-4 z-20 flex flex-col gap-3 pointer-events-none">
+                  <div className="bg-white/80 backdrop-blur-xl border border-slate-100 p-4 md:p-6 rounded-3xl text-left md:text-right flex flex-row md:flex-col gap-6 md:gap-4 shadow-[0_20px_50px_rgba(0,0,0,0.05)] pointer-events-auto">
+                    <div className="flex-1 md:flex-none">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Period Total</p>
+                      <p className="text-2xl md:text-3xl font-mono font-black text-[#0F172A]">{laborAnalytics.totalHours.toLocaleString()}<span className="text-[10px] text-blue-600 ml-1">HRS</span></p>
+                    </div>
+                    <div className="pt-0 md:pt-4 border-l md:border-l-0 md:border-t border-slate-100 md:border-slate-50 pl-6 md:pl-0 flex-1 md:flex-none">
+                      <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Year-to-Date</p>
+                      <p className="text-xl font-mono font-black text-emerald-700">{laborAnalytics.ytdHours.toLocaleString()}<span className="text-[10px] text-emerald-500 ml-1">HRS</span></p>
+                    </div>
                   </div>
-                  <h4 className="text-[14px] font-black text-slate-300 uppercase tracking-[0.3em]">No Deployment Matrix</h4>
-                  <p className="text-[10px] text-slate-400 font-black uppercase mt-2 tracking-widest">Awaiting rotational synchronization</p>
                 </div>
               )}
-            </div>
-            
-            {/* Legend / Stats overlay - Repositioned for mobile friendliness */}
-            <div className="md:absolute top-[100px] right-8 flex flex-col gap-3 pointer-events-none z-20 mt-6 md:mt-0">
-              <div className="bg-white/80 backdrop-blur-xl border border-slate-100 p-4 md:p-6 rounded-3xl text-left md:text-right flex flex-row md:flex-col gap-6 md:gap-4 shadow-[0_20px_50px_rgba(0,0,0,0.05)] pointer-events-auto">
-                <div className="flex-1 md:flex-none">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Period Total</p>
-                  <p className="text-2xl md:text-3xl font-mono font-black text-[#0F172A]">{laborAnalytics.totalHours.toLocaleString()}<span className="text-[10px] text-blue-600 ml-1">HRS</span></p>
+
+              {laborProfileTab === 'individual' ? (
+                <div className="h-[450px] w-full pt-10">
+                  {laborAnalytics.chartData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart 
+                        data={laborAnalytics.chartData} 
+                        margin={{ top: 20, right: 30, left: 10, bottom: 80 }}
+                        barGap={0}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
+                        <XAxis 
+                          dataKey="name" 
+                          stroke="#94A3B8" 
+                          fontSize={11} 
+                          fontWeight="900" 
+                          tickLine={false} 
+                          axisLine={false} 
+                          interval={0}
+                          angle={-45}
+                          textAnchor="end"
+                          dy={10}
+                        />
+                        <YAxis 
+                          stroke="#94A3B8" 
+                          fontSize={10} 
+                          fontWeight="900" 
+                          tickLine={false} 
+                          axisLine={false}
+                          tickFormatter={(val) => `${val}h`}
+                        />
+                        <RechartsTooltip 
+                          cursor={{ fill: '#F8FAFC' }}
+                          contentStyle={{ backgroundColor: '#fff', border: '1px solid #F1F5F9', borderRadius: '12px', fontSize: '11px', fontWeight: 900, boxShadow: '0 10px 15px -10px rgba(0,0,0,0.1)' }}
+                          content={({ active, payload }) => {
+                            if (active && payload && payload.length) {
+                              const data = payload[0].payload;
+                              return (
+                                <div className="bg-white border border-slate-100 p-4 rounded-2xl shadow-xl">
+                                  <p className="text-[10px] font-black text-[#0F172A] uppercase mb-1">{data.name}</p>
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: groupColorMap[data.group] || '#3b82f6' }} />
+                                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{data.group}</p>
+                                  </div>
+                                  <p className="text-[16px] font-mono font-black text-blue-600">{data.hours.toLocaleString()} HR</p>
+                                  <p className="text-[8px] text-slate-400 font-bold uppercase mt-1 tracking-tighter">Verified Operational Log</p>
+                                </div>
+                              );
+                            }
+                            return null;
+                          }}
+                        />
+                        <Bar 
+                          dataKey="hours" 
+                          radius={[8, 8, 0, 0]} 
+                          animationDuration={1500}
+                        >
+                          <LabelList 
+                            dataKey="hours" 
+                            position="top" 
+                            fill="#94A3B8" 
+                            fontSize={10} 
+                            fontWeight="900"
+                            formatter={(val: number) => val.toLocaleString()}
+                          />
+                          {laborAnalytics.chartData.map((entry, index) => (
+                            <Cell 
+                              key={`cell-${index}`} 
+                              fill={groupColorMap[entry.group] || '#3b82f6'} 
+                              fillOpacity={0.9}
+                              stroke={groupColorMap[entry.group] || '#3b82f6'}
+                              strokeWidth={1}
+                            />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-full flex flex-col items-center justify-center bg-slate-50 border border-dashed border-slate-200 rounded-3xl group-hover:border-blue-500/20 transition-all">
+                      <div className="relative">
+                        <Activity size={64} className="text-slate-200 mb-4 animate-pulse" />
+                        <AlertCircle size={20} className="absolute -top-2 -right-2 text-rose-500/20" />
+                      </div>
+                      <h4 className="text-[14px] font-black text-slate-300 uppercase tracking-[0.3em]">No Deployment Matrix</h4>
+                      <p className="text-[10px] text-slate-400 font-black uppercase mt-2 tracking-widest">Awaiting rotational synchronization</p>
+                    </div>
+                  )}
                 </div>
-                <div className="pt-0 md:pt-4 border-l md:border-l-0 md:border-t border-slate-100 md:border-slate-50 pl-6 md:pl-0 flex-1 md:flex-none">
-                  <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Year-to-Date</p>
-                  <p className="text-xl font-mono font-black text-emerald-700">{laborAnalytics.ytdHours.toLocaleString()}<span className="text-[10px] text-emerald-500 ml-1">HRS</span></p>
+              ) : laborProfileTab === 'monthly' ? (
+                <div className="h-[450px] w-full pt-10">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={laborAnalytics.monthlyTrends} margin={{ top: 20, right: 30, left: 10, bottom: 20 }}>
+                      <defs>
+                        {uniqueGroups.filter(g => g !== 'ALL').map(group => (
+                          <linearGradient key={`color${sanitizeId(group)}`} id={`color${sanitizeId(group)}`} x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor={groupColorMap[group] || '#3b82f6'} stopOpacity={0.4}/>
+                            <stop offset="95%" stopColor={groupColorMap[group] || '#3b82f6'} stopOpacity={0}/>
+                          </linearGradient>
+                        ))}
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
+                      <XAxis 
+                        dataKey="month" 
+                        stroke="#94A3B8" 
+                        fontSize={10} 
+                        fontWeight={900}
+                        tickLine={false} 
+                        axisLine={false}
+                        interval={0}
+                        dy={10}
+                      />
+                      <YAxis 
+                        stroke="#94A3B8" 
+                        fontSize={10} 
+                        fontWeight={900}
+                        tickLine={false} 
+                        axisLine={false}
+                        tickFormatter={(val) => `${val}h`}
+                      />
+                      <RechartsTooltip 
+                        contentStyle={{ backgroundColor: '#fff', border: 'none', borderRadius: '16px', fontSize: '11px', fontWeight: 900, boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}
+                        content={({ active, payload, label }) => {
+                          if (active && payload && payload.length) {
+                             const data = payload[0].payload;
+                             return (
+                               <div className="bg-white border border-slate-50 p-5 rounded-[2rem] shadow-2xl min-w-[200px]">
+                                 <div className="flex items-center justify-between mb-4 border-b border-slate-50 pb-3">
+                                   <p className="text-[12px] font-black text-[#0F172A] uppercase tracking-widest">{label}</p>
+                                   <p className="text-[9px] font-mono font-black text-blue-600 bg-blue-50 px-3 py-1 rounded-full">{data.total.toLocaleString()} HR</p>
+                                 </div>
+                                 <div className="space-y-3">
+                                   {uniqueGroups.filter(g => g !== 'ALL' && data[g] > 0).map(g => (
+                                     <div key={g} className="flex items-center justify-between gap-6">
+                                       <div className="flex items-center gap-3">
+                                         <div className="w-2 h-2 rounded-full" style={{ backgroundColor: groupColorMap[g] || '#3b82f6' }} />
+                                         <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{g}</span>
+                                       </div>
+                                       <span className="text-[10px] font-mono font-black text-[#0F172A]">{data[g].toLocaleString()} HR</span>
+                                     </div>
+                                   ))}
+                                 </div>
+                               </div>
+                             );
+                          }
+                          return null;
+                        }}
+                      />
+                      {uniqueGroups.filter(g => g !== 'ALL').map((group, idx) => (
+                        <Area 
+                          key={group}
+                          type="monotone" 
+                          stackId="1"
+                          dataKey={group} 
+                          stroke={groupColorMap[group] || COLORS[idx % COLORS.length]} 
+                          fillOpacity={1} 
+                          fill={`url(#color${sanitizeId(group)})`} 
+                          strokeWidth={3} 
+                          dot={false}
+                          activeDot={{ r: 6, strokeWidth: 0 }} 
+                          animationDuration={2000}
+                        />
+                      ))}
+                    </AreaChart>
+                  </ResponsiveContainer>
                 </div>
-              </div>
+              ) : (
+                <div className="h-[450px] w-full pt-10">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={laborAnalytics.monthlyTrends} margin={{ top: 20, right: 30, left: 10, bottom: 20 }}>
+                      <defs>
+                        <linearGradient id="colorPulseHours" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2}/>
+                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
+                      <XAxis 
+                        dataKey="month" 
+                        stroke="#94A3B8" 
+                        fontSize={10} 
+                        fontWeight={900}
+                        tickLine={false} 
+                        axisLine={false}
+                        interval={0}
+                        dy={10}
+                      />
+                      <YAxis hide />
+                      <RechartsTooltip 
+                        contentStyle={{ backgroundColor: '#fff', border: '1px solid #F1F5F9', borderRadius: '20px', fontSize: '11px', fontWeight: 900, boxShadow: '0 20px 40px -10px rgba(0,0,0,0.1)', padding: '16px' }}
+                        content={({ active, payload }) => {
+                          if (active && payload && payload.length) {
+                            const data = payload[0].payload;
+                            return (
+                              <div className="space-y-2">
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{data.month}</p>
+                                <p className="text-xl font-mono font-black text-blue-600">{data.total.toLocaleString()} HR</p>
+                                <p className="text-[8px] text-slate-400 font-bold uppercase tracking-tight">Total Monthly Operational Hours</p>
+                              </div>
+                            );
+                          }
+                          return null;
+                        }}
+                      />
+                      <Area 
+                        type="monotone" 
+                        dataKey="total" 
+                        stroke="#3b82f6" 
+                        fillOpacity={1} 
+                        fill="url(#colorPulseHours)" 
+                        strokeWidth={4} 
+                        dot={{ r: 4, strokeWidth: 2, fill: '#fff', stroke: '#3b82f6' }}
+                        activeDot={{ r: 8, strokeWidth: 2, fill: '#fff', stroke: '#3b82f6' }}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1288,19 +1581,25 @@ export function Dashboard({ isGuest }: DashboardProps) {
               <div key={p.id} className="flex items-center justify-between p-4 rounded-2xl bg-[var(--theme-container)] border border-[var(--theme-border)] hover:bg-[var(--theme-card)] hover:shadow-lg hover:shadow-black/5 transition-all group">
                 <div className="flex items-center gap-4">
                   <div className={cn(
-                    "w-2.5 h-2.5 rounded-full",
-                    isOnDuty ? "bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.5)] animate-pulse" : isTransit ? "bg-blue-400" : "bg-slate-200"
+                    "w-2.5 h-2.5 rounded-full transition-all duration-500",
+                    isOnDuty ? "bg-green-500 shadow-[0_0_12px_rgba(34,197,94,0.6)] animate-pulse" : isTransit ? "bg-blue-400" : "bg-slate-200"
                   )} />
                   <div>
                     <p className="text-[12px] font-black text-[var(--theme-text)] uppercase tracking-tighter truncate group-hover:text-blue-600 transition-colors">{p.fullName}</p>
-                    {daysRemainingText && (
-                      <p className={cn(
-                        "text-[9px] font-mono font-bold uppercase tracking-widest mt-1",
-                        isOnDuty ? "text-emerald-600" : "text-[var(--theme-text-muted)]"
-                      )}>
-                        {daysRemainingText}
-                      </p>
-                    )}
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{p.rosterGroup}</span>
+                      {daysRemainingText && (
+                        <>
+                          <span className="text-[8px] text-slate-300">•</span>
+                          <p className={cn(
+                            "text-[9px] font-mono font-bold uppercase tracking-widest",
+                            isOnDuty ? "text-green-600" : "text-[var(--theme-text-muted)]"
+                          )}>
+                            {daysRemainingText}
+                          </p>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div className={cn(
@@ -1530,7 +1829,7 @@ export function Dashboard({ isGuest }: DashboardProps) {
           
           <div className="flex flex-wrap items-center gap-2 md:gap-3 w-full xl:w-auto">
              {/* Search/Filter Controls */}
-             <div className="relative flex items-center justify-center w-10 h-10 md:w-auto md:h-auto md:px-4 py-2 bg-[var(--theme-card)] border border-[var(--theme-border)] rounded-xl text-[10px] shadow-sm flex-none">
+             <div className="relative flex items-center justify-center w-10 md:w-auto md:h-auto md:px-4 py-2 bg-[var(--theme-card)] border border-[var(--theme-border)] rounded-xl text-[10px] shadow-sm flex-none">
                 <Users size={12} className="text-[var(--theme-text-muted)]" />
                 <select 
                   value={summaryGroup} 
@@ -1540,9 +1839,10 @@ export function Dashboard({ isGuest }: DashboardProps) {
                   <option value="ALL">All Groups</option>
                   {uniqueGroups.map(g => <option key={g} value={g}>{g}</option>)}
                 </select>
+                <span className="hidden md:block ml-2 text-[var(--theme-text)] font-black uppercase tracking-tight">{summaryGroup === 'ALL' ? 'Groups' : summaryGroup}</span>
              </div>
 
-             <div className="relative flex items-center justify-center w-10 h-10 md:w-auto md:h-auto md:px-4 py-2 bg-[var(--theme-card)] border border-[var(--theme-border)] rounded-xl text-[10px] shadow-sm flex-none">
+             <div className="relative flex items-center justify-center w-10 md:w-auto md:h-auto md:px-4 py-2 bg-[var(--theme-card)] border border-[var(--theme-border)] rounded-xl text-[10px] shadow-sm flex-none">
                 <Users size={12} className="text-[var(--theme-text-muted)]" />
                 <select 
                   value={summaryPersonnel} 
@@ -1552,9 +1852,10 @@ export function Dashboard({ isGuest }: DashboardProps) {
                   <option value="ALL">All Staff</option>
                   {personnel.sort((a,b) => a.fullName.localeCompare(b.fullName)).map(p => <option key={p.id} value={p.id}>{p.fullName}</option>)}
                 </select>
+                <span className="hidden md:block ml-2 text-[var(--theme-text)] font-black uppercase tracking-tight">{summaryPersonnel === 'ALL' ? 'Staff' : personnel.find(p => p.id === summaryPersonnel)?.fullName.split(' ')[0]}</span>
              </div>
 
-             <div className="relative flex items-center justify-center w-10 h-10 md:w-auto md:h-auto md:px-4 py-2 bg-[var(--theme-card)] border border-[var(--theme-border)] rounded-xl text-[10px] shadow-sm flex-none">
+             <div className="relative flex items-center justify-center w-10 md:w-auto md:h-auto md:px-4 py-2 bg-[var(--theme-card)] border border-[var(--theme-border)] rounded-xl text-[10px] shadow-sm flex-none">
                 <Calendar size={12} className="text-[var(--theme-text-muted)]" />
                 <select 
                   value={summaryMonth} 
@@ -1564,9 +1865,10 @@ export function Dashboard({ isGuest }: DashboardProps) {
                   <option value="ALL">All Months</option>
                   {availableMonths.map(m => <option key={m} value={m}>{formatPeriod(m)}</option>)}
                 </select>
+                <span className="hidden md:block ml-2 text-[var(--theme-text)] font-black uppercase tracking-tight">{summaryMonth === 'ALL' ? 'Months' : formatPeriod(summaryMonth)}</span>
              </div>
 
-             <div className="relative flex items-center justify-center w-10 h-10 md:w-auto md:h-auto md:px-4 py-2 bg-[var(--theme-card)] border border-[var(--theme-border)] rounded-xl text-[10px] shadow-sm flex-none">
+             <div className="relative flex items-center justify-center w-10 md:w-auto md:h-auto md:px-4 py-2 bg-[var(--theme-card)] border border-[var(--theme-border)] rounded-xl text-[10px] shadow-sm flex-none">
                 <Activity size={12} className="text-[var(--theme-text-muted)]" />
                 <select 
                   value={summaryStatus} 
@@ -1579,6 +1881,7 @@ export function Dashboard({ isGuest }: DashboardProps) {
                   <option value="Need Action">Need Action</option>
                   <option value="Pending">Pending</option>
                 </select>
+                <span className="hidden md:block ml-2 text-[var(--theme-text)] font-black uppercase tracking-tight">{summaryStatus === 'ALL' ? 'Status' : summaryStatus}</span>
              </div>
 
              <div className="flex items-center gap-2 md:gap-3 flex-1 md:flex-none justify-end">
@@ -1602,14 +1905,39 @@ export function Dashboard({ isGuest }: DashboardProps) {
         </div>
 
         <div className="p-0 overflow-x-auto custom-scrollbar bg-white">
-          {/* Desktop Table */}
           <table className="hidden md:table w-full text-left border-collapse">
-            <thead className="text-[10px] text-slate-400 uppercase tracking-[0.2em] bg-[#F8FAFC]">
-              <tr>
-                <th className="py-5 px-8 font-black border-b border-slate-100">Personnel</th>
-                <th className="py-5 px-8 font-black border-b border-slate-100">Duty Period</th>
-                <th className="py-5 px-8 font-black border-b border-slate-100">Flight Ticket</th>
-                <th className="py-5 px-8 font-black border-b border-slate-100 text-center">Ticket Status</th>
+            <thead className="bg-[#F8FAFC] border-b border-slate-100">
+              <tr className="text-[10px] text-slate-400 font-extrabold uppercase tracking-[0.2em]">
+                <th 
+                  className="py-5 px-8 text-left cursor-pointer hover:text-blue-600 transition-colors"
+                  onClick={() => setSummarySort(prev => ({ key: 'personnel', direction: prev.key === 'personnel' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
+                >
+                  <div className="flex items-center gap-2">
+                    Personnel 
+                    {summarySort.key === 'personnel' && (summarySort.direction === 'asc' ? <ArrowUp size={10} className="ml-1" /> : <ArrowDown size={10} className="ml-1" />)}
+                  </div>
+                </th>
+                <th 
+                  className="py-5 px-8 text-left cursor-pointer hover:text-blue-600 transition-colors"
+                  onClick={() => setSummarySort(prev => ({ key: 'duty', direction: prev.key === 'duty' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
+                >
+                  <div className="flex items-center gap-2">
+                    Duty Period
+                    {summarySort.key === 'duty' && (summarySort.direction === 'asc' ? <ArrowUp size={10} className="ml-1" /> : <ArrowDown size={10} className="ml-1" />)}
+                  </div>
+                </th>
+                <th className="py-5 px-8 text-left">Route Details</th>
+                <th 
+                  className="py-5 px-8 text-left cursor-pointer hover:text-blue-600 transition-colors"
+                  onClick={() => setSummarySort(prev => ({ key: 'date', direction: prev.key === 'date' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
+                >
+                  <div className="flex items-center gap-2">
+                    Date
+                    {summarySort.key === 'date' && (summarySort.direction === 'asc' ? <ArrowUp size={10} className="ml-1" /> : <ArrowDown size={10} className="ml-1" />)}
+                  </div>
+                </th>
+                <th className="py-5 px-8 text-left">Status</th>
+                <th className="py-5 px-8 text-left">Remarks</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -1694,37 +2022,59 @@ export function Dashboard({ isGuest }: DashboardProps) {
                          )}
                        </div>
                     </td>
-                    <td className="py-6 px-8 text-center">
+                    <td className="py-6 px-8 text-center min-w-[150px]">
                        <div className="flex flex-col items-center gap-2">
                          {flight.requestedDateIDtoDZ && (
                            <div className={cn(
                              "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border",
-                             getEffectiveStatus(flight.statusIDtoDZ || 'Requested', flight.requestedDateIDtoDZ) === 'Need Action'
+                             getEffectiveStatus(flight.statusIDtoDZ || 'Requested', flight.requestedDateIDtoDZ) === 'COMPLETED' ? "bg-emerald-600 text-white border-emerald-500/20 shadow-sm" :
+                             getEffectiveStatus(flight.statusIDtoDZ || 'Requested', flight.requestedDateIDtoDZ) === 'Need Action' || getEffectiveStatus(flight.statusIDtoDZ || 'Requested', flight.requestedDateIDtoDZ) === 'OVERDUE'
                                ? "bg-rose-600 text-white border-rose-500/20 shadow-sm"
-                               : flight.statusIDtoDZ === 'Received'
-                                 ? "bg-emerald-600 text-white border-emerald-500/20 shadow-sm"
-                                 : flight.statusIDtoDZ === 'Requested'
-                                   ? "bg-indigo-600 text-white border-indigo-500/20 shadow-sm"
-                                   : "bg-amber-500 text-white border-amber-400/20 shadow-sm"
+                               : flight.statusIDtoDZ === 'Requested'
+                                 ? "bg-indigo-600 text-white border-indigo-500/20 shadow-sm"
+                                 : "bg-orange-600 text-white border-orange-500/20 shadow-sm"
                            )}>
-                             {getStatusLabel(flight.statusIDtoDZ || 'Requested', flight.requestedDateIDtoDZ)}
+                             {getEffectiveStatus(flight.statusIDtoDZ || 'Requested', flight.requestedDateIDtoDZ)}
                            </div>
                          )}
                          {flight.requestedDateDZtoID && (
                            <div className={cn(
                              "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border",
-                             getEffectiveStatus(flight.statusDZtoID || 'Requested', flight.requestedDateDZtoID) === 'Need Action'
+                             getEffectiveStatus(flight.statusDZtoID || 'Requested', flight.requestedDateDZtoID) === 'COMPLETED' ? "bg-blue-600 text-white border-blue-500/20 shadow-sm" :
+                             getEffectiveStatus(flight.statusDZtoID || 'Requested', flight.requestedDateDZtoID) === 'Need Action' || getEffectiveStatus(flight.statusDZtoID || 'Requested', flight.requestedDateDZtoID) === 'OVERDUE'
                                ? "bg-rose-600 text-white border-rose-500/20 shadow-sm"
-                               : flight.statusDZtoID === 'Received' 
-                                 ? "bg-blue-600 text-white border-blue-500/20 shadow-sm"
-                                 : flight.statusDZtoID === 'Requested'
-                                   ? "bg-indigo-600 text-white border-indigo-500/20 shadow-sm"
-                                   : "bg-amber-500 text-white border-amber-400/20 shadow-sm"
+                               : flight.statusDZtoID === 'Requested'
+                                 ? "bg-indigo-600 text-white border-indigo-500/20 shadow-sm"
+                                 : "bg-orange-600 text-white border-orange-500/20 shadow-sm"
                            )}>
-                             {getStatusLabel(flight.statusDZtoID || 'Requested', flight.requestedDateDZtoID)}
+                             {getEffectiveStatus(flight.statusDZtoID || 'Requested', flight.requestedDateDZtoID)}
                            </div>
                          )}
                        </div>
+                    </td>
+                    <td className="py-6 px-8 text-left">
+                      <div className="flex flex-col gap-2">
+                        {flight.requestedDateIDtoDZ && (
+                          <span className={cn(
+                            "text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded",
+                            flight.statusIDtoDZ === 'Received' ? "text-emerald-600 bg-emerald-50" : 
+                            getDaysUntil(flight.requestedDateIDtoDZ) < 0 ? "text-rose-600 bg-rose-50 animate-pulse" : "text-slate-400"
+                          )}>
+                            {flight.statusIDtoDZ === 'Received' ? 'COMPLETED' : 
+                             getDaysUntil(flight.requestedDateIDtoDZ) < 0 ? 'OVERDUE' : '--'}
+                          </span>
+                        )}
+                        {flight.requestedDateDZtoID && (
+                          <span className={cn(
+                            "text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded",
+                            flight.statusDZtoID === 'Received' ? "text-emerald-600 bg-emerald-50" : 
+                            getDaysUntil(flight.requestedDateDZtoID) < 0 ? "text-rose-600 bg-rose-50 animate-pulse" : "text-slate-400"
+                          )}>
+                            {flight.statusDZtoID === 'Received' ? 'COMPLETED' : 
+                             getDaysUntil(flight.requestedDateDZtoID) < 0 ? 'OVERDUE' : '--'}
+                          </span>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -1775,15 +2125,15 @@ export function Dashboard({ isGuest }: DashboardProps) {
                               </div>
                               <div className={cn(
                                  "px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border shadow-sm",
-                                 getEffectiveStatus(flight.statusIDtoDZ || 'Requested', flight.requestedDateIDtoDZ) === 'Need Action'
+                                 getEffectiveStatus(flight.statusIDtoDZ || 'Requested', flight.requestedDateIDtoDZ) === 'Need Action' || getEffectiveStatus(flight.statusIDtoDZ || 'Requested', flight.requestedDateIDtoDZ) === 'OVERDUE'
                                    ? "bg-rose-600 text-white border-rose-500/20"
-                                   : flight.statusIDtoDZ === 'Received'
+                                   : getEffectiveStatus(flight.statusIDtoDZ || 'Requested', flight.requestedDateIDtoDZ) === 'COMPLETED'
                                      ? "bg-emerald-600 text-white border-emerald-500/20"
                                      : flight.statusIDtoDZ === 'Requested'
                                        ? "bg-blue-600 text-white border-blue-500/20"
-                                       : "bg-amber-500 text-white border-amber-400/20"
+                                       : "bg-orange-600 text-white border-orange-500/20"
                               )}>
-                                 {getStatusLabel(flight.statusIDtoDZ || 'Requested', flight.requestedDateIDtoDZ)}
+                                 {getEffectiveStatus(flight.statusIDtoDZ || 'Requested', flight.requestedDateIDtoDZ)}
                               </div>
                            </div>
                         )}
@@ -1807,15 +2157,15 @@ export function Dashboard({ isGuest }: DashboardProps) {
                               </div>
                               <div className={cn(
                                  "px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border shadow-sm",
-                                 getEffectiveStatus(flight.statusDZtoID || 'Requested', flight.requestedDateDZtoID) === 'Need Action'
-                                   ? "bg-rose-600 text-white border-rose-100"
-                                   : flight.statusDZtoID === 'Received'
-                                     ? "bg-blue-600 text-white border-blue-100"
+                                 getEffectiveStatus(flight.statusDZtoID || 'Requested', flight.requestedDateDZtoID) === 'Need Action' || getEffectiveStatus(flight.statusDZtoID || 'Requested', flight.requestedDateDZtoID) === 'OVERDUE'
+                                   ? "bg-rose-600 text-white border-rose-100 shadow-[0_0_12px_rgba(225,29,72,0.4)]"
+                                   : getEffectiveStatus(flight.statusDZtoID || 'Requested', flight.requestedDateDZtoID) === 'COMPLETED'
+                                     ? "bg-blue-600 text-white border-blue-100 shadow-[0_0_12px_rgba(37,99,235,0.4)]"
                                      : flight.statusDZtoID === 'Requested'
                                        ? "bg-blue-600 text-white border-blue-100"
-                                       : "bg-amber-500 text-white border-amber-100"
+                                       : "bg-orange-600 text-white border-orange-100 shadow-[0_0_12px_rgba(249,115,22,0.4)]"
                               )}>
-                                 {getStatusLabel(flight.statusDZtoID || 'Requested', flight.requestedDateDZtoID)}
+                                 {getEffectiveStatus(flight.statusDZtoID || 'Requested', flight.requestedDateDZtoID)}
                               </div>
                            </div>
                         )}

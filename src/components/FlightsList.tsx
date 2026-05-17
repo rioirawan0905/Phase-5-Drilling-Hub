@@ -45,6 +45,8 @@ export function FlightsList({ isGuest }: FlightsListProps) {
   const [editingFlight, setEditingFlight] = useState<FlightRequest | null>(null);
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'Active' | 'Completed'>('Active');
+  const [sortConfig, setSortConfig] = useState<{ key: 'personnel' | 'duty' | 'date' | 'status', direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
 
   // Filters State
   const [filterMonth, setFilterMonth] = useState<string>('ALL');
@@ -172,7 +174,7 @@ export function FlightsList({ isGuest }: FlightsListProps) {
   };
 
   const getStatusStyle = (status: FlightStatus, requestedDate?: string | null) => {
-    if (status === 'Received') return "bg-emerald-600 text-white border-emerald-500/30";
+    if (status === 'Received') return "bg-emerald-600 text-white border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.2)] font-black px-2 py-0.5 rounded";
     
     // Explicit or Auto "Need Action" logic
     let isUrgent = status === 'Need Action';
@@ -181,16 +183,17 @@ export function FlightsList({ isGuest }: FlightsListProps) {
       const today = new Date();
       const diffTime = flightDate.getTime() - today.getTime();
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      // Apply Need Action if date is within 14 days OR past today (Overdue)
       if (diffDays <= 14) isUrgent = true;
     }
 
     if (isUrgent) {
-      return "bg-rose-600 text-white animate-pulse font-bold px-2 py-0.5 rounded shadow-[0_0_10px_rgba(225,29,72,0.3)]";
+      return "bg-rose-600 text-white animate-pulse font-black px-2 py-0.5 rounded shadow-[0_0_12px_rgba(225,29,72,0.4)]";
     }
 
-    if (status === 'Not Requested') return "bg-amber-500 text-white border-amber-400/30 px-2 py-0.5 rounded"; // Pending
-    if (status === 'Requested') return "bg-blue-600 text-white font-bold px-2 py-0.5 rounded text-center min-w-[70px] shadow-[0_0_10px_rgba(37,99,235,0.2)]";
-    return "bg-indigo-600 text-white font-bold px-2 py-0.5 rounded text-center min-w-[70px] shadow-[0_0_10px_rgba(79,70,229,0.2)]";
+    if (status === 'Not Requested') return "bg-orange-500 text-white border-orange-400/30 px-2 py-0.5 rounded font-black shadow-[0_0_10px_rgba(249,115,22,0.2)]"; 
+    if (status === 'Requested') return "bg-blue-600 text-white font-black px-2 py-0.5 rounded text-center min-w-[70px] shadow-[0_0_10px_rgba(37,99,235,0.2)]";
+    return "bg-indigo-600 text-white font-black px-2 py-0.5 rounded text-center min-w-[70px] shadow-[0_0_10px_rgba(79,70,229,0.2)]";
   };
 
   const getStatusLabel = (status: FlightStatus, requestedDate?: string | null) => {
@@ -202,6 +205,7 @@ export function FlightsList({ isGuest }: FlightsListProps) {
       const diffTime = flightDate.getTime() - today.getTime();
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       
+      if (diffDays <= 0) return "Overdue";
       if (diffDays <= 14) return "Need Action";
     }
 
@@ -229,7 +233,7 @@ export function FlightsList({ isGuest }: FlightsListProps) {
   };
 
   const filteredFlights = useMemo(() => {
-    return flights.filter(f => {
+    let result = flights.filter(f => {
       const person = personnel.find(p => p.id === f.personnelId);
       
       // Personnel filter
@@ -247,18 +251,66 @@ export function FlightsList({ isGuest }: FlightsListProps) {
       
       // Month filter
       if (filterMonth !== 'ALL') {
-        const monthNum = parseInt(filterMonth);
         const hasMonth = flightDates.some(d => {
           if (!d) return false;
-          // Simple string check is usually enough if format is YYYY-MM-DD
           return d.split('-')[1] === filterMonth.padStart(2, '0');
         });
         if (!hasMonth) return false;
       }
+
+      // Tab Filtering: "Completed" means ALL legs are Received
+      const isCompleted = (f.requestedDateDZtoID ? f.statusDZtoID === 'Received' : true) && 
+                          (f.requestedDateIDtoDZ ? f.statusIDtoDZ === 'Received' : true);
+      
+      if (activeTab === 'Completed' && !isCompleted) return false;
+      if (activeTab === 'Active' && isCompleted) return false;
       
       return true;
     });
-  }, [flights, personnel, filterMonth, filterYear, filterGroup, filterPersonnel]);
+
+    // Sorting Logic
+    result = result.sort((a, b) => {
+      const personA = personnel.find(p => p.id === a.personnelId);
+      const personB = personnel.find(p => p.id === b.personnelId);
+
+      const getEarliest = (f: FlightRequest) => {
+        const dates = [f.requestedDateDZtoID, f.requestedDateIDtoDZ]
+          .filter(Boolean)
+          .map(d => new Date(d!).getTime());
+        return dates.length > 0 ? Math.min(...dates) : Infinity;
+      };
+
+      const getStatusRank = (f: FlightRequest) => {
+        const s1 = getStatusLabel(f.statusDZtoID || 'Requested', f.requestedDateDZtoID);
+        const s2 = getStatusLabel(f.statusIDtoDZ || 'Requested', f.requestedDateIDtoDZ);
+        if (s1 === 'Overdue' || s2 === 'Overdue') return 0;
+        if (s1 === 'Need Action' || s2 === 'Need Action') return 1;
+        if (s1 === 'Requested' || s2 === 'Requested') return 2;
+        return 3;
+      };
+
+      let comparison = 0;
+      switch (sortConfig.key) {
+        case 'personnel':
+          comparison = (personA?.fullName || '').localeCompare(personB?.fullName || '');
+          break;
+        case 'duty':
+          comparison = (a.startDate || '').localeCompare(b.startDate || '');
+          break;
+        case 'date':
+          comparison = getEarliest(a) - getEarliest(b);
+          break;
+        case 'status':
+          comparison = getStatusRank(a) - getStatusRank(b);
+          break;
+        default:
+          comparison = (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0);
+      }
+      return sortConfig.direction === 'asc' ? comparison : -comparison;
+    });
+
+    return result;
+  }, [flights, personnel, filterMonth, filterYear, filterGroup, filterPersonnel, activeTab, sortConfig]);
 
   const uniqueGroups = useMemo(() => {
     const groups = new Set(personnel.map(p => p.rosterGroup).filter(Boolean));
@@ -288,9 +340,33 @@ export function FlightsList({ isGuest }: FlightsListProps) {
 
       {/* Filters Bar */}
       <div className="flex flex-col gap-4 p-3 md:p-4 bg-[var(--theme-card)] border border-[var(--theme-border)] rounded-xl shadow-sm">
-        <div className="flex items-center gap-2">
-          <Filter size={12} className="text-[var(--theme-text-muted)]" />
-          <span className="text-[9px] font-bold text-[var(--theme-text-muted)] uppercase tracking-widest">Filters</span>
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="flex bg-[var(--theme-status)] p-1 rounded-xl border border-[var(--theme-border)]">
+              <button 
+                onClick={() => setActiveTab('Active')}
+                className={cn(
+                  "px-4 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all",
+                  activeTab === 'Active' ? "bg-blue-600 text-white shadow-lg" : "text-[var(--theme-text-muted)] hover:text-blue-600"
+                )}
+              >
+                Active
+              </button>
+              <button 
+                onClick={() => setActiveTab('Completed')}
+                className={cn(
+                  "px-4 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all",
+                  activeTab === 'Completed' ? "bg-emerald-600 text-white shadow-lg" : "text-[var(--theme-text-muted)] hover:text-emerald-600"
+                )}
+              >
+                Completed
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <Filter size={12} className="text-[var(--theme-text-muted)] border-l border-[var(--theme-border)] pl-2" />
+              <span className="text-[9px] font-black text-[var(--theme-text-muted)] uppercase tracking-widest">Filters</span>
+            </div>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 flex-1">
@@ -364,8 +440,24 @@ export function FlightsList({ isGuest }: FlightsListProps) {
           <table className="hidden md:table w-full text-left min-w-[800px] md:min-w-0">
           <thead className="text-[10px] text-[var(--theme-text-muted)] uppercase tracking-widest bg-[var(--theme-status)] border-b border-[var(--theme-border)]">
             <tr>
-              <th className="py-4 px-6 font-black">Personnel</th>
-              <th className="py-4 px-6 font-black">Duty Period</th>
+              <th 
+                className="py-4 px-6 font-black cursor-pointer hover:text-blue-600 transition-colors"
+                onClick={() => setSortConfig(prev => ({ key: 'personnel', direction: prev.key === 'personnel' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
+              >
+                <div className="flex items-center gap-1">
+                  Personnel
+                  {sortConfig.key === 'personnel' && (sortConfig.direction === 'asc' ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />)}
+                </div>
+              </th>
+              <th 
+                className="py-4 px-6 font-black cursor-pointer hover:text-blue-600 transition-colors"
+                onClick={() => setSortConfig(prev => ({ key: 'duty', direction: prev.key === 'duty' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
+              >
+                <div className="flex items-center gap-1">
+                  Duty Period
+                  {sortConfig.key === 'duty' && (sortConfig.direction === 'asc' ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />)}
+                </div>
+              </th>
               <th className="py-4 px-6 font-black">Transit Route / Leg Control</th>
               <th className="py-4 px-6 font-black text-right">Actions</th>
             </tr>
@@ -374,11 +466,11 @@ export function FlightsList({ isGuest }: FlightsListProps) {
             {filteredFlights.length === 0 ? (
               <tr>
                 <td colSpan={4} className="py-20 text-center text-[10px] uppercase font-mono text-[var(--theme-text-muted)] tracking-widest">
-                  No active requests in system
+                  No {activeTab.toLowerCase()} requests in system
                 </td>
               </tr>
             ) : (
-              filteredFlights.sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)).map((f) => {
+              filteredFlights.map((f) => {
                 const person = personnel.find(p => p.id === f.personnelId);
                 return (
                   <tr key={f.id} className="hover:bg-[var(--theme-status)] transition-colors group">
@@ -404,17 +496,8 @@ export function FlightsList({ isGuest }: FlightsListProps) {
                               </div>
                             </div>
                             <div className="flex items-center gap-4">
-                              <span className={cn(
-                                "px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border shadow-sm",
-                                getStatusLabel(f.statusIDtoDZ || 'Requested', f.requestedDateIDtoDZ) === 'Need Action'
-                                  ? "bg-rose-600 text-white border-rose-500/20"
-                                  : f.statusIDtoDZ === 'Received'
-                                    ? "bg-emerald-600 text-white border-emerald-500/20"
-                                    : f.statusIDtoDZ === 'Requested'
-                                      ? "bg-blue-600 text-white border-blue-500/20"
-                                      : "bg-amber-500 text-white border-amber-400/20"
-                              )}>
-                                {getStatusLabel(f.statusIDtoDZ || 'Requested', f.requestedDateIDtoID)}
+                              <span className={getStatusStyle(f.statusIDtoDZ || 'Requested', f.requestedDateIDtoDZ)}>
+                                {getStatusLabel(f.statusIDtoDZ || 'Requested', f.requestedDateIDtoDZ)}
                               </span>
                               {!isGuest ? (
                                 <select 
@@ -442,16 +525,7 @@ export function FlightsList({ isGuest }: FlightsListProps) {
                               </div>
                             </div>
                             <div className="flex items-center gap-4">
-                              <span className={cn(
-                                "px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border shadow-sm",
-                                getStatusLabel(f.statusDZtoID || 'Requested', f.requestedDateDZtoID) === 'Need Action'
-                                  ? "bg-rose-600 text-white border-rose-500/20"
-                                  : f.statusDZtoID === 'Received'
-                                    ? "bg-emerald-600 text-white border-emerald-500/20"
-                                    : f.statusDZtoID === 'Requested'
-                                      ? "bg-blue-600 text-white border-blue-500/20"
-                                      : "bg-amber-500 text-white border-amber-400/20"
-                              )}>
+                              <span className={getStatusStyle(f.statusDZtoID || 'Requested', f.requestedDateDZtoID)}>
                                 {getStatusLabel(f.statusDZtoID || 'Requested', f.requestedDateDZtoID)}
                               </span>
                               {!isGuest ? (
@@ -498,8 +572,7 @@ export function FlightsList({ isGuest }: FlightsListProps) {
                 const person = personnel.find(p => p.id === f.personnelId);
                 return (
                   <div key={f.id} className="bg-[var(--theme-card)] border border-[var(--theme-border)] rounded-2xl shadow-sm overflow-hidden flex flex-col group">
-                    {/* Header: Name & Group */}
-                    <div className="p-4 border-b border-[var(--theme-border)] bg-[var(--theme-status)] flex justify-between items-start">
+                    <div className="p-4 md:hidden border-b border-[var(--theme-border)] bg-[var(--theme-status)] flex justify-between items-start">
                       <div>
                         <p className="font-black text-[13px] text-[var(--theme-text)] uppercase tracking-tight">{person?.fullName || 'UNKNOWN'}</p>
                         <p className="text-[9px] text-[var(--theme-text-muted)] font-mono font-bold uppercase tracking-widest mt-0.5">{person?.rosterGroup || 'SECURE MANIFEST'}</p>
@@ -534,16 +607,7 @@ export function FlightsList({ isGuest }: FlightsListProps) {
                               <ArrowLeft size={10} className="text-emerald-600" />
                               <span className="text-[8px] font-black text-[var(--theme-text-muted)] uppercase tracking-widest">JKT → ALG</span>
                             </div>
-                            <span className={cn(
-                              "px-2 py-0.5 rounded-full text-[8px] font-black uppercase border shadow-sm",
-                              getStatusLabel(f.statusIDtoDZ || 'Requested', f.requestedDateIDtoDZ) === 'Need Action'
-                                ? "bg-rose-600 text-white border-rose-500"
-                                : f.statusIDtoDZ === 'Received'
-                                  ? "bg-emerald-600 text-white border-emerald-500"
-                                  : f.statusIDtoDZ === 'Requested'
-                                    ? "bg-blue-600 text-white border-blue-500"
-                                    : "bg-amber-500 text-white border-amber-400"
-                            )}>
+                            <span className={getStatusStyle(f.statusIDtoDZ || 'Requested', f.requestedDateIDtoDZ)}>
                               {getStatusLabel(f.statusIDtoDZ || 'Requested', f.requestedDateIDtoDZ)}
                             </span>
                           </div>
@@ -571,16 +635,7 @@ export function FlightsList({ isGuest }: FlightsListProps) {
                               <ArrowRight size={10} className="text-blue-600" />
                               <span className="text-[8px] font-black text-[var(--theme-text-muted)] uppercase tracking-widest">ALG → JKT</span>
                             </div>
-                            <span className={cn(
-                              "px-2 py-0.5 rounded-full text-[8px] font-black uppercase border shadow-sm",
-                              getStatusLabel(f.statusDZtoID || 'Requested', f.requestedDateDZtoID) === 'Need Action'
-                                ? "bg-rose-600 text-white border-rose-500"
-                                : f.statusDZtoID === 'Received'
-                                  ? "bg-emerald-600 text-white border-emerald-500"
-                                  : f.statusDZtoID === 'Requested'
-                                    ? "bg-blue-600 text-white border-blue-500"
-                                    : "bg-amber-500 text-white border-amber-400"
-                            )}>
+                            <span className={getStatusStyle(f.statusDZtoID || 'Requested', f.requestedDateDZtoID)}>
                               {getStatusLabel(f.statusDZtoID || 'Requested', f.requestedDateDZtoID)}
                             </span>
                           </div>
