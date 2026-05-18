@@ -86,6 +86,7 @@ export function Dashboard({ isGuest }: DashboardProps) {
   const [summaryPersonnel, setSummaryPersonnel] = useState<string>('ALL');
   const [summaryMonth, setSummaryMonth] = useState<string>('ALL');
   const [summaryStatus, setSummaryStatus] = useState<string>('ALL');
+  const [summaryTab, setSummaryTab] = useState<'Active' | 'Completed'>('Active');
   const [laborProfileTab, setLaborProfileTab] = useState<'individual' | 'monthly' | 'work-hours'>('individual');
 
   const uniqueGroups = useMemo(() => [...new Set(personnel.map(p => p.rosterGroup).filter(Boolean))].sort(), [personnel]);
@@ -532,6 +533,13 @@ export function Dashboard({ isGuest }: DashboardProps) {
         const s2 = getEffectiveStatus(f.statusIDtoDZ || 'Requested', f.requestedDateIDtoDZ);
         if (s1 !== summaryStatus && s2 !== summaryStatus) return false;
       }
+
+      const isCompleted = (f.requestedDateDZtoID ? f.statusDZtoID === 'Received' : true) && 
+                          (f.requestedDateIDtoDZ ? f.statusIDtoDZ === 'Received' : true);
+      
+      if (summaryTab === 'Active' && isCompleted) return false;
+      if (summaryTab === 'Completed' && !isCompleted) return false;
+
       return true;
     });
 
@@ -1828,6 +1836,22 @@ export function Dashboard({ isGuest }: DashboardProps) {
           </div>
           
           <div className="flex flex-wrap items-center gap-2 md:gap-3 w-full xl:w-auto">
+             <div className="flex items-center bg-white border border-slate-100 rounded-xl p-1 shadow-sm mr-2 select-none">
+                {(['Active', 'Completed'] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => setSummaryTab(tab)}
+                    className={cn(
+                      "px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap",
+                      summaryTab === tab 
+                        ? "bg-[#0F172A] text-white shadow-lg shadow-blue-900/10" 
+                        : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"
+                    )}
+                  >
+                    {tab === 'Active' ? 'Active Requests' : 'Completed Requests'}
+                  </button>
+                ))}
+             </div>
              {/* Search/Filter Controls */}
              <div className="relative flex items-center justify-center w-10 md:w-auto md:h-auto md:px-4 py-2 bg-[var(--theme-card)] border border-[var(--theme-border)] rounded-xl text-[10px] shadow-sm flex-none">
                 <Users size={12} className="text-[var(--theme-text-muted)]" />
@@ -1932,7 +1956,7 @@ export function Dashboard({ isGuest }: DashboardProps) {
                   onClick={() => setSummarySort(prev => ({ key: 'date', direction: prev.key === 'date' && prev.direction === 'asc' ? 'desc' : 'asc' }))}
                 >
                   <div className="flex items-center gap-2">
-                    Date
+                    Action Status
                     {summarySort.key === 'date' && (summarySort.direction === 'asc' ? <ArrowUp size={10} className="ml-1" /> : <ArrowDown size={10} className="ml-1" />)}
                   </div>
                 </th>
