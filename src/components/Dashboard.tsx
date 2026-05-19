@@ -534,8 +534,10 @@ export function Dashboard({ isGuest }: DashboardProps) {
         if (s1 !== summaryStatus && s2 !== summaryStatus) return false;
       }
 
-      const isCompleted = (f.requestedDateDZtoID ? f.statusDZtoID === 'Received' : true) && 
-                          (f.requestedDateIDtoDZ ? f.statusIDtoDZ === 'Received' : true);
+      const hasAnyLeg = !!(f.requestedDateDZtoID || f.requestedDateIDtoDZ);
+      const isCompleted = hasAnyLeg && 
+                          (!f.requestedDateDZtoID || f.statusDZtoID === 'Received') && 
+                          (!f.requestedDateIDtoDZ || f.statusIDtoDZ === 'Received');
       
       if (summaryTab === 'Active' && isCompleted) return false;
       if (summaryTab === 'Completed' && !isCompleted) return false;
@@ -567,7 +569,7 @@ export function Dashboard({ isGuest }: DashboardProps) {
     });
 
     return result;
-  }, [allFlights, personnel, summaryGroup, summaryPersonnel, summaryMonth, summaryStatus, summarySort]);
+  }, [allFlights, personnel, summaryGroup, summaryPersonnel, summaryMonth, summaryStatus, summarySort, summaryTab]);
 
   const groupColorMap: Record<string, string> = {
     'A': '#3b82f6',
