@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot, query } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { FlightRequest, Personnel, Scheduling, HubEvent } from '../types';
-import { PieChart, Pie, Tooltip as RechartsTooltip, ResponsiveContainer, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, AreaChart, Area, LabelList } from 'recharts';
+import { PieChart, Pie, Tooltip as RechartsTooltip, ResponsiveContainer, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, AreaChart, Area, LabelList, LineChart, Line } from 'recharts';
 import { Users, Plane, Activity, CheckCircle2, AlertCircle, Clock, Filter, Calendar, Briefcase, LayoutGrid, ArrowRight, ArrowLeft, ArrowUp, ArrowDown, Download, Info, Globe, Sun, Cloud, CloudRain, CloudSnow, CloudLightning, CloudDrizzle, CloudFog, Wind, Tag, Palmtree, Wrench, Copy, Check, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn, formatDate } from '../lib/utils';
@@ -570,6 +570,73 @@ export function Dashboard({ isGuest }: DashboardProps) {
 
     return result;
   }, [allFlights, personnel, summaryGroup, summaryPersonnel, summaryMonth, summaryStatus, summarySort, summaryTab]);
+
+  const flightPerformanceData = useMemo(() => {
+    const data = [];
+    const now = new Date();
+    
+    // Generate last 30 days
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(now.getDate() - i);
+      const dateStr = d.toISOString().split('T')[0]; // YYYY-MM-DD
+      
+      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      const label = `${monthNames[d.getMonth()]} ${d.getDate()}`;
+      
+      let requestedCount = 0;
+      let completedCount = 0;
+      
+      allFlights.forEach(f => {
+        // DZ to ID leg
+        if (f.requestedDateDZtoID) {
+          const legDate = f.requestedDateDZtoID.split('T')[0];
+          if (legDate === dateStr) {
+            requestedCount++;
+            if (f.statusDZtoID === 'Received') {
+              completedCount++;
+            }
+          }
+        }
+        // ID to DZ leg
+        if (f.requestedDateIDtoDZ) {
+          const legDate = f.requestedDateIDtoDZ.split('T')[0];
+          if (legDate === dateStr) {
+            requestedCount++;
+            if (f.statusIDtoDZ === 'Received') {
+              completedCount++;
+            }
+          }
+        }
+      });
+      
+      data.push({
+        date: dateStr,
+        label,
+        requests: requestedCount,
+        completed: completedCount,
+      });
+    }
+    return data;
+  }, [allFlights]);
+
+  const performanceStats = useMemo(() => {
+    let totalRequests = 0;
+    let totalCompleted = 0;
+    
+    flightPerformanceData.forEach(d => {
+      totalRequests += d.requests;
+      totalCompleted += d.completed;
+    });
+    
+    const completionRate = totalRequests > 0 ? Math.round((totalCompleted / totalRequests) * 100) : 100;
+    
+    return {
+      totalRequests,
+      totalCompleted,
+      completionRate,
+    };
+  }, [flightPerformanceData]);
 
   const groupColorMap: Record<string, string> = {
     'A': '#3b82f6',
@@ -1943,6 +2010,103 @@ export function Dashboard({ isGuest }: DashboardProps) {
           </div>
         </div>
       </div>
+
+      {/* Flight Performance Section */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="theme-container p-6 md:p-8 bg-white border border-slate-100 relative overflow-hidden group shadow-sm hover:shadow-2xl hover:shadow-blue-900/5 transition-all mb-6"
+      >
+        <div className="absolute -top-24 -right-24 w-64 h-64 bg-blue-500/5 rounded-full blur-[100px] pointer-events-none" />
+        
+        <div className="relative z-10 flex flex-col gap-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="p-2 bg-[var(--theme-status)] rounded-lg">
+                  <Activity size={18} className="text-blue-600" />
+                </div>
+                <h3 className="text-sm font-black text-[#0F172A] uppercase tracking-[0.2em]">Flight Performance</h3>
+              </div>
+              <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">30-Day Logistics & Fulfillment Trends</p>
+            </div>
+            
+            <div className="flex items-center gap-4 bg-slate-50 border border-slate-100 rounded-2xl p-4 shadow-sm w-full sm:w-auto">
+              <div className="flex-1 sm:flex-none">
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Requests</p>
+                <p className="text-xl font-mono font-black text-[#0F172A]">{performanceStats.totalRequests}<span className="text-[10px] text-blue-600 ml-1">LEGS</span></p>
+              </div>
+              <div className="h-8 w-[1px] bg-slate-200" />
+              <div className="flex-1 sm:flex-none">
+                <p className="text-[9px] font-black text-green-600 uppercase tracking-widest mb-1">Completed</p>
+                <p className="text-xl font-mono font-black text-green-700">{performanceStats.totalCompleted}<span className="text-[10px] text-green-500 ml-1">OK</span></p>
+              </div>
+              <div className="h-8 w-[1px] bg-slate-200" />
+              <div className="flex-1 sm:flex-none">
+                <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest mb-1">Fulfillment</p>
+                <p className="text-xl font-mono font-black text-blue-700">{performanceStats.completionRate}%</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="h-[280px] w-full pt-4">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={flightPerformanceData} margin={{ top: 20, right: 30, left: 10, bottom: 10 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
+                <XAxis 
+                  dataKey="label" 
+                  stroke="#94A3B8" 
+                  fontSize={9} 
+                  fontWeight={900}
+                  tickLine={false} 
+                  axisLine={false}
+                  dy={10}
+                />
+                <YAxis 
+                  stroke="#94A3B8" 
+                  fontSize={9} 
+                  fontWeight={900}
+                  tickLine={false} 
+                  axisLine={false}
+                  allowDecimals={false}
+                  dx={-5}
+                />
+                <RechartsTooltip 
+                  contentStyle={{ 
+                    backgroundColor: '#0F172A', 
+                    border: 'none', 
+                    borderRadius: '12px', 
+                    fontSize: '11px', 
+                    fontWeight: 900, 
+                    color: '#fff',
+                    boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)' 
+                  }}
+                  itemStyle={{ color: '#fff' }}
+                  labelStyle={{ color: '#94A3B8', marginBottom: '4px' }}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="requests" 
+                  name="Total Requests" 
+                  stroke="#2563EB" 
+                  strokeWidth={3} 
+                  dot={{ r: 4, strokeWidth: 2, fill: '#fff' }} 
+                  activeDot={{ r: 6, strokeWidth: 0 }} 
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="completed" 
+                  name="Completed Flights" 
+                  stroke="#10B981" 
+                  strokeWidth={3} 
+                  dot={{ r: 4, strokeWidth: 2, fill: '#fff' }} 
+                  activeDot={{ r: 6, strokeWidth: 0 }} 
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </motion.div>
 
       {/* Manifest Row */}
       <div id="flight-requests-summary" className="theme-container bg-[var(--theme-card)] border border-[var(--theme-border)] overflow-hidden shadow-sm hover:shadow-2xl hover:shadow-blue-900/5 transition-all">
