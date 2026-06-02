@@ -617,6 +617,96 @@ export function Dashboard({ isGuest }: DashboardProps) {
     XLSX.writeFile(workbook, `Flight_Requests_Summary_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
+  const calculateOnDutyDays = (personId: string, monthStr: string) => {
+    const [yearStr, monthNumStr] = monthStr.split('-');
+    const year = parseInt(yearStr);
+    const month = parseInt(monthNumStr) - 1; // 0-indexed in JS Dates
+    
+    // Total days in the month
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    let onDutyDays = 0;
+    
+    // Find all active ON_DUTY schedules for this person
+    const personSchedules = schedules.filter(s => {
+      const status = (s.status || '').toString().toUpperCase();
+      const isOnDuty = status === 'ON_DUTY' || status === 'ON-DUTY';
+      return s.personnelId === personId && isOnDuty;
+    });
+    
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dayDate = new Date(year, month, day);
+      dayDate.setHours(12, 0, 0, 0); // avoid timezone shifts
+      
+      const isDayOnDuty = personSchedules.some(s => {
+        const sStart = toDate(s.startDate);
+        const sEnd = toDate(s.endDate);
+        if (!sStart || !sEnd) return false;
+        
+        const startLimit = new Date(sStart);
+        startLimit.setHours(0, 0, 0, 0);
+        const endLimit = new Date(sEnd);
+        endLimit.setHours(23, 59, 59, 999);
+        
+        return dayDate >= startLimit && dayDate <= endLimit;
+      });
+      
+      if (isDayOnDuty) {
+        onDutyDays++;
+      }
+    }
+    
+    return onDutyDays;
+  };
+
+  const exportOnDutyDays = () => {
+    const monthsToExport = selectedPeriods.length > 0 ? selectedPeriods : availableMonths;
+    const targetPersonnel = personnel.filter(p => {
+      const matchesGroup = selectedGroup === 'ALL' || p.rosterGroup === selectedGroup;
+      const matchesPerson = selectedPersonnel === 'ALL' || p.id === selectedPersonnel;
+      return matchesGroup && matchesPerson;
+    });
+
+    const data: any[] = [];
+    
+    targetPersonnel.forEach(p => {
+      monthsToExport.forEach(m => {
+        const days = calculateOnDutyDays(p.id, m);
+        if (days > 0 || (selectedPeriods.length > 0 && selectedPersonnel !== 'ALL')) {
+          data.push({
+            'Personnel ID': p.id,
+            'Full Name': p.fullName || 'Unknown',
+            'Roster Group': p.rosterGroup || 'N/A',
+            'Role/Designation': p.role || 'N/A',
+            'Report Month': formatPeriod(m),
+            'On Duty Days': days,
+            'Est. Working Hours': days * 12,
+          });
+        }
+      });
+    });
+
+    if (data.length === 0) {
+      data.push({
+        'Personnel ID': 'N/A',
+        'Full Name': 'No on-duty records found for selection',
+        'Roster Group': 'N/A',
+        'Role/Designation': 'N/A',
+        'Report Month': 'N/A',
+        'On Duty Days': 0,
+        'Est. Working Hours': 0,
+      });
+    }
+
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "On Duty Days Report");
+    
+    const groupText = selectedGroup === 'ALL' ? 'All_Groups' : `Group_${selectedGroup}`;
+    const periodText = selectedPeriods.length === 0 ? 'LIFETIME' : `${selectedPeriods.length}_Months`;
+    
+    XLSX.writeFile(workbook, `OnDuty_Days_Report_${groupText}_${periodText}_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
   const upcomingEvents = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
     return events
@@ -1227,13 +1317,43 @@ export function Dashboard({ isGuest }: DashboardProps) {
                   <Filter size={12} className="md:hidden text-[var(--theme-text-muted)]" />
                   <select 
                     value={selectedGroup} 
-                    onChange={(e) => setSelectedGroup(e.target.value)}
+                    onChange={(e) => {
+                      setSelectedGroup(e.target.value);
+                      setSelectedPersonnel('ALL');
+                    }}
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer md:relative md:opacity-100 md:bg-transparent md:text-[10px] md:text-[11px] md:font-black md:text-[var(--theme-text)] md:focus:outline-none md:uppercase md:w-auto"
                   >
                     <option value="ALL">All Groups</option>
                     {uniqueGroups.map(g => <option key={g} value={g} className="bg-white">{g}</option>)}
                   </select>
                 </div>
+
+                {/* Personnel Selector */}
+                <div className="relative flex items-center justify-center w-10 h-10 md:w-auto md:h-auto md:px-4 py-2 bg-[var(--theme-status)] border border-[var(--theme-border)] rounded-xl group/filter hover:bg-[var(--theme-card)] hover:shadow-lg transition-all shadow-sm flex-none">
+                  <span className="hidden md:block text-[9px] md:text-[10px] font-black text-[var(--theme-text-muted)] uppercase tracking-widest mr-2">Personnel:</span>
+                  <Users size={12} className="md:hidden text-[var(--theme-text-muted)]" />
+                  <select 
+                    value={selectedPersonnel} 
+                    onChange={(e) => setSelectedPersonnel(e.target.value)}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer md:relative md:opacity-100 md:bg-transparent md:text-[10px] md:text-[11px] md:font-black md:text-[var(--theme-text)] md:focus:outline-none md:uppercase md:w-auto select-none"
+                  >
+                    <option value="ALL">All Personnel</option>
+                    {personnel
+                      .filter(p => selectedGroup === 'ALL' || p.rosterGroup === selectedGroup)
+                      .map(p => <option key={p.id} value={p.id} className="bg-white">{p.fullName}</option>)
+                    }
+                  </select>
+                </div>
+
+                {/* Download Button */}
+                <button
+                  onClick={exportOnDutyDays}
+                  className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[10px] md:text-[11px] font-black uppercase tracking-widest shadow-sm transition-all flex-none select-none"
+                  title="Download On Duty Days for selected filters and months"
+                >
+                  <Download size={13} />
+                  <span className="hidden sm:inline">Download Duty Days</span>
+                </button>
 
                 {/* Period Selector */}
                 <div className="relative flex-1 sm:flex-none">
