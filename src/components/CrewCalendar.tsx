@@ -81,8 +81,10 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
   const [selectedDayDetails, setSelectedDayDetails] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [isExportSettingsOpen, setIsExportSettingsOpen] = useState(false);
-  const [exportYear, setExportYear] = useState(currentDate.getFullYear());
-  const [exportMonth, setExportMonth] = useState(currentDate.getMonth());
+  const [exportStartYear, setExportStartYear] = useState(currentDate.getFullYear());
+  const [exportStartMonth, setExportStartMonth] = useState(currentDate.getMonth());
+  const [exportEndYear, setExportEndYear] = useState(currentDate.getFullYear());
+  const [exportEndMonth, setExportEndMonth] = useState(currentDate.getMonth());
   const ganttRef = useRef<HTMLDivElement>(null);
   const [hoveredWeekItem, setHoveredWeekItem] = useState<{
     id: string;
@@ -532,8 +534,10 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
   };
 
   const handleExportPDF = () => {
-    setExportYear(currentDate.getFullYear());
-    setExportMonth(currentDate.getMonth());
+    setExportStartYear(currentDate.getFullYear());
+    setExportStartMonth(currentDate.getMonth());
+    setExportEndYear(currentDate.getFullYear());
+    setExportEndMonth(currentDate.getMonth());
     setIsExportSettingsOpen(true);
   };
 
@@ -542,29 +546,79 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
     setIsExportSettingsOpen(false);
     setIsExporting(true);
 
-    // Update view date and mode to requested export month
-    const exportDate = new Date(exportYear, exportMonth, 1);
-    setCurrentDate(exportDate);
+    const originalDate = currentDate;
+    const originalViewMode = viewMode;
+
+    const getMonthsInRange = (startY: number, startM: number, endY: number, endM: number) => {
+      const list: Date[] = [];
+      let y = startY;
+      let m = startM;
+      while (y < endY || (y === endY && m <= endM)) {
+        list.push(new Date(y, m, 1));
+        m++;
+        if (m > 11) {
+          m = 0;
+          y++;
+        }
+      }
+      return list;
+    };
+
+    let startY = exportStartYear;
+    let startM = exportStartMonth;
+    let endY = exportEndYear;
+    let endM = exportEndMonth;
+
+    if (startY > endY || (startY === endY && startM > endM)) {
+      [startY, endY] = [endY, startY];
+      [startM, endM] = [endM, startM];
+    }
+
+    const months = getMonthsInRange(startY, startM, endY, endM);
     setViewMode('gantt');
 
-    // Wait for render
-    setTimeout(async () => {
-      try {
+    try {
+      let pdf: jsPDF | null = null;
+
+      for (let i = 0; i < months.length; i++) {
+        const monthDate = months[i];
+        setCurrentDate(monthDate);
+        
+        // Wait for React to re-render the Gantt view with new date
+        await new Promise((resolve) => setTimeout(resolve, 800));
+
         const dataUrl = await toPng(ganttRef.current!, { 
           backgroundColor: '#0a0a0c',
           quality: 1,
           pixelRatio: 2
         });
-        const pdf = new jsPDF('l', 'px', [ganttRef.current!.scrollWidth, ganttRef.current!.scrollHeight]);
-        pdf.addImage(dataUrl, 'PNG', 0, 0, ganttRef.current!.scrollWidth, ganttRef.current!.scrollHeight);
-        const exportMonthStr = String(exportMonth + 1).padStart(2, '0');
-        pdf.save(`Crew_Roster_${exportYear}_${exportMonthStr}.pdf`);
-      } catch (err) {
-        console.error('Export failed', err);
-      } finally {
-        setIsExporting(false);
+
+        const width = ganttRef.current!.scrollWidth;
+        const height = ganttRef.current!.scrollHeight;
+
+        if (!pdf) {
+          pdf = new jsPDF('l', 'px', [width, height]);
+        } else {
+          pdf.addPage([width, height], 'l');
+        }
+
+        pdf.addImage(dataUrl, 'PNG', 0, 0, width, height);
       }
-    }, 1000);
+
+      if (pdf) {
+        const startMonthStr = String(startM + 1).padStart(2, '0');
+        const endMonthStr = String(endM + 1).padStart(2, '0');
+        pdf.save(`Crew_Roster_${startY}_${startMonthStr}_to_${endY}_${endMonthStr}.pdf`);
+      }
+    } catch (err) {
+      console.error('Export failed', err);
+      alert('An error occurred during PDF generation.');
+    } finally {
+      // Restore the application state
+      setCurrentDate(originalDate);
+      setViewMode(originalViewMode);
+      setIsExporting(false);
+    }
   };
 
   const daysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
@@ -1377,7 +1431,7 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
         </div>
 
         {/* Chart Body */}
-        <div className="overflow-x-auto custom-scrollbar border rounded-xl relative" ref={ganttRef} style={{ backgroundColor: 'var(--theme-container)', borderColor: 'var(--theme-border)', maxHeight: '700px', overflowY: 'auto' }}>
+        <div className="overflow-x-auto custom-scrollbar border rounded-xl relative" ref={ganttRef} style={{ backgroundColor: 'var(--theme-container)', borderColor: 'var(--theme-border)', maxHeight: isExporting ? 'none' : '700px', overflowY: isExporting ? 'visible' : 'auto' }}>
           <div style={{ width: totalGridWidth + 192 }}>
             {/* Header */}
             <div className="flex border-b border-slate-200 bg-white sticky top-0 z-40">
@@ -2471,12 +2525,13 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
               </div>
 
               <div className="space-y-6">
+                {/* Start Month Selection */}
                 <div className="space-y-2">
-                  <label className="text-[10px] text-[var(--theme-text-muted)] uppercase font-bold px-1">Select Export Period</label>
+                  <label className="text-[10px] text-[var(--theme-text-muted)] uppercase font-bold px-1">Start Month</label>
                   <div className="grid grid-cols-2 gap-3">
                     <select 
-                      value={exportMonth}
-                      onChange={(e) => setExportMonth(parseInt(e.target.value))}
+                      value={exportStartMonth}
+                      onChange={(e) => setExportStartMonth(parseInt(e.target.value))}
                       className="bg-[var(--theme-status)] border border-[var(--theme-border)] rounded-xl px-4 py-2.5 text-xs font-black text-[var(--theme-text)] uppercase tracking-widest focus:outline-none focus:border-blue-500"
                     >
                       {Array.from({ length: 12 }).map((_, i) => (
@@ -2486,8 +2541,35 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                       ))}
                     </select>
                     <select 
-                      value={exportYear}
-                      onChange={(e) => setExportYear(parseInt(e.target.value))}
+                      value={exportStartYear}
+                      onChange={(e) => setExportStartYear(parseInt(e.target.value))}
+                      className="bg-[var(--theme-status)] border border-[var(--theme-border)] rounded-xl px-4 py-2.5 text-xs font-black text-[var(--theme-text)] uppercase tracking-widest focus:outline-none focus:border-blue-500"
+                    >
+                      {[2024, 2025, 2026, 2027].map(y => (
+                        <option key={y} value={y} className="bg-[var(--theme-container)]">{y}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* End Month Selection */}
+                <div className="space-y-2">
+                  <label className="text-[10px] text-[var(--theme-text-muted)] uppercase font-bold px-1">End Month</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <select 
+                      value={exportEndMonth}
+                      onChange={(e) => setExportEndMonth(parseInt(e.target.value))}
+                      className="bg-[var(--theme-status)] border border-[var(--theme-border)] rounded-xl px-4 py-2.5 text-xs font-black text-[var(--theme-text)] uppercase tracking-widest focus:outline-none focus:border-blue-500"
+                    >
+                      {Array.from({ length: 12 }).map((_, i) => (
+                        <option key={i} value={i} className="bg-[var(--theme-container)]">
+                          {new Date(2000, i).toLocaleString('default', { month: 'long' })}
+                        </option>
+                      ))}
+                    </select>
+                    <select 
+                      value={exportEndYear}
+                      onChange={(e) => setExportEndYear(parseInt(e.target.value))}
                       className="bg-[var(--theme-status)] border border-[var(--theme-border)] rounded-xl px-4 py-2.5 text-xs font-black text-[var(--theme-text)] uppercase tracking-widest focus:outline-none focus:border-blue-500"
                     >
                       {[2024, 2025, 2026, 2027].map(y => (
@@ -2499,7 +2581,7 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
 
                 <div className="bg-blue-500/5 border border-blue-500/10 p-3 rounded-xl">
                   <p className="text-[9px] text-blue-400 font-bold leading-relaxed uppercase italic">
-                    The export will capture the Gantt chart for the selected month including all active duty periods and hub events.
+                    The export will capture the Gantt chart for the range of months selected. Multi-month export will generate a multi-page PDF document, automatically split with one month per page.
                   </p>
                 </div>
 
