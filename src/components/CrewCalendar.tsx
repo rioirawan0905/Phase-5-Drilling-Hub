@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, MouseEvent, useRef } from 'react';
+import React, { useState, useEffect, useMemo, MouseEvent, useRef } from 'react';
 import { collection, onSnapshot, query, addDoc, updateDoc, doc, deleteDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Personnel, Scheduling, ScheduleStatus, HubEvent } from '../types';
@@ -54,10 +54,21 @@ interface CrewCalendarProps {
 
 export function CrewCalendar({ isGuest }: CrewCalendarProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('month');
+  const [ganttZoom, setGanttZoom] = useState<'days' | 'weeks' | 'quarter'>('days');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [personnel, setPersonnel] = useState<Personnel[]>([]);
-  const [schedules, setSchedules] = useState<Scheduling[]>([]);
-  const [events, setEvents] = useState<HubEvent[]>([]);
+  const [dbSchedules, setDbSchedules] = useState<Scheduling[]>([]);
+  const [dbEvents, setDbEvents] = useState<HubEvent[]>([]);
+  const [simulatedSchedules, setSimulatedSchedules] = useState<Scheduling[]>([]);
+  const [simulatedEvents, setSimulatedEvents] = useState<HubEvent[]>([]);
+
+  const schedules = useMemo(() => {
+    return [...dbSchedules, ...simulatedSchedules];
+  }, [dbSchedules, simulatedSchedules]);
+
+  const events = useMemo(() => {
+    return [...dbEvents, ...simulatedEvents];
+  }, [dbEvents, simulatedEvents]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState<Scheduling | null>(null);
@@ -101,6 +112,30 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
     if (status === 'ON_DUTY') return 'shadow-lg shadow-black/20';
     if (status === 'TRANSIT') return 'opacity-60 ring-2 ring-white/20';
     return 'opacity-40 grayscale';
+  };
+
+  const getScheduleStyle = (s: Scheduling, group: string) => {
+    const isSim = s.id?.startsWith('sim-');
+    if (isSim) {
+      if (group === 'A' || group === 'Group A') {
+        return 'bg-blue-400/30 text-blue-950 border-2 border-dashed border-blue-500/70 shadow-none';
+      }
+      if (group === 'B' || group === 'Group B') {
+        return 'bg-emerald-400/30 text-emerald-950 border-2 border-dashed border-emerald-500/70 shadow-none';
+      }
+      if (group === 'C' || group === 'Group C') {
+        return 'bg-orange-400/35 text-orange-950 border-2 border-dashed border-orange-500/70 shadow-none';
+      }
+      if (group === 'D' || group === 'Group D') {
+        return 'bg-purple-400/30 text-purple-950 border-2 border-dashed border-purple-500/70 shadow-none';
+      }
+      if (group === 'E' || group === 'Group E') {
+        return 'bg-rose-400/30 text-rose-950 border-2 border-dashed border-rose-500/70 shadow-none';
+      }
+      return 'bg-slate-400/30 text-slate-950 border-2 border-dashed border-slate-500/70 shadow-none';
+    }
+    
+    return `${getGroupColor(group)} text-white ${getStatusColor(s.status)} border-transparent`;
   };
 
   const sortedPersonnel = useMemo(() => {
@@ -183,16 +218,78 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
       setPersonnel(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Personnel)));
     });
     const unsubS = onSnapshot(collection(db, 'schedules'), (snap) => {
-      setSchedules(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Scheduling)));
+      setDbSchedules(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Scheduling)));
     });
     const unsubE = onSnapshot(collection(db, 'events'), (snap) => {
-      setEvents(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as HubEvent)));
+      setDbEvents(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as HubEvent)));
     });
     return () => { unsubP(); unsubS(); unsubE(); };
   }, []);
 
   const onSaveEvent = async (data: EventFormData) => {
     try {
+      if (isGuest) {
+        if (editingEvent && editingEvent.id.startsWith('sim-')) {
+          setSimulatedEvents(prev => prev.map(e => e.id === editingEvent.id ? {
+            ...e,
+            title: data.title,
+            description: data.description || '',
+            location: data.location,
+            startDate: data.startDate,
+            endDate: data.endDate,
+            type: data.type
+          } as HubEvent : e));
+        } else {
+          if (data.recurrence === 'none') {
+            const newSim = {
+              id: `sim-ev-${Date.now()}`,
+              ...data,
+              createdAt: new Date()
+            } as any;
+            setSimulatedEvents(prev => [...prev, newSim]);
+          } else {
+            const eventsToCreate: HubEvent[] = [];
+            const seriesStart = new Date(data.startDate);
+            const seriesEnd = new Date(data.endDate);
+            let current = new Date(seriesStart);
+            const originalDay = seriesStart.getDate();
+
+            while (current <= seriesEnd) {
+              const dayOfWeek = current.getDay();
+              const isAllowedDay = !data.recurrenceDays || data.recurrenceDays.length === 0 || data.recurrenceDays.includes(dayOfWeek);
+
+              if (isAllowedDay) {
+                eventsToCreate.push({
+                  id: `sim-ev-${Date.now()}-${current.getTime()}`,
+                  ...data,
+                  startDate: toLocalDateStr(current),
+                  endDate: toLocalDateStr(current),
+                  createdAt: new Date()
+                } as any);
+              }
+
+              if (data.recurrence === 'daily') {
+                current.setDate(current.getDate() + 1);
+              } else if (data.recurrence === 'weekly') {
+                current.setDate(current.getDate() + 7);
+              } else if (data.recurrence === 'biweekly') {
+                current.setDate(current.getDate() + 14);
+              } else if (data.recurrence === 'monthly') {
+                current.setMonth(current.getMonth() + 1);
+                current.setDate(originalDay);
+              } else {
+                break;
+              }
+            }
+            setSimulatedEvents(prev => [...prev, ...eventsToCreate]);
+          }
+        }
+        setIsEventModalOpen(false);
+        setEditingEvent(null);
+        resetEvent({ type: 'general', title: '', description: '', startDate: '', endDate: '', recurrence: 'none', recurrenceDays: [] });
+        return;
+      }
+
       if (editingEvent) {
         await updateDoc(doc(db, 'events', editingEvent.id), data);
       } else {
@@ -253,8 +350,8 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
     }
   };
 
-  const handleOpenAddEvent = (dateStr?: string) => {
-    if (isGuest) return;
+  const handleOpenAddEvent = (dateStr?: string, overrideGuestCheck = false) => {
+    if (isGuest && !overrideGuestCheck) return;
     setEditingEvent(null);
     resetEvent({ 
       type: 'general', 
@@ -270,7 +367,7 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
   };
 
   const handleEditEvent = (ev: HubEvent) => {
-    if (isGuest) return;
+    if (isGuest && !ev.id.startsWith('sim-')) return;
     setEditingEvent(ev);
     resetEvent({
       title: ev.title,
@@ -287,6 +384,14 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
 
   const handleDeleteEvent = async (id: string, e?: MouseEvent) => {
     if (e) e.stopPropagation();
+    if (id.startsWith('sim-')) {
+      if (confirm('Are you sure you want to delete this simulated event?')) {
+        setSimulatedEvents(prev => prev.filter(ev => ev.id !== id));
+        setIsEventModalOpen(false);
+        setEditingEvent(null);
+      }
+      return;
+    }
     if (isGuest) return;
     try {
       if (confirm('Are you sure you want to delete this event? This action cannot be undone.')) {
@@ -312,6 +417,33 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
 
   const onSaveSchedule = async (data: ScheduleFormData) => {
     try {
+      if (isGuest) {
+        if (editingSchedule && editingSchedule.id.startsWith('sim-')) {
+          setSimulatedSchedules(prev => prev.map(s => s.id === editingSchedule.id ? {
+            ...s,
+            personnelId: data.personnelIds[0],
+            startDate: data.startDate,
+            endDate: data.endDate,
+            status: data.status
+          } as Scheduling : s));
+        } else {
+          // Simulated Multi-save or single-save
+          const newSims = data.personnelIds.map(pid => ({
+            id: `sim-${Date.now()}-${pid}`,
+            personnelId: pid,
+            startDate: data.startDate,
+            endDate: data.endDate,
+            status: data.status,
+            createdAt: new Date()
+          } as any));
+          setSimulatedSchedules(prev => [...prev, ...newSims]);
+        }
+        setIsModalOpen(false);
+        setEditingSchedule(null);
+        reset({ status: 'ON_DUTY', personnelIds: [] });
+        return;
+      }
+
       if (editingSchedule) {
         // Since we are editing one, we take the first selected ID (should be exactly one)
         const updatedData = {
@@ -342,8 +474,8 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
     }
   };
 
-  const handleOpenAdd = (dateStr?: string, pId?: string) => {
-    if (isGuest) return;
+  const handleOpenAdd = (dateStr?: string, pId?: string, overrideGuestCheck = false) => {
+    if (isGuest && !overrideGuestCheck) return;
     setEditingSchedule(null);
     reset({ 
       status: 'ON_DUTY', 
@@ -355,7 +487,7 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
   };
 
   const handleEdit = (s: Scheduling) => {
-    if (isGuest) return;
+    if (isGuest && !s.id.startsWith('sim-')) return;
     setEditingSchedule(s);
     reset({
       personnelIds: [s.personnelId],
@@ -367,9 +499,25 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
   };
 
   const handleDelete = async (id: string) => {
+    if (!id) return;
+    const idStr = String(id);
+    if (idStr.startsWith('sim-')) {
+      if (confirm('Delete this simulated duty record?')) {
+        setSimulatedSchedules(prev => prev.filter(s => s.id !== idStr));
+        setIsModalOpen(false);
+        setEditingSchedule(null);
+      }
+      return;
+    }
     if (isGuest) return;
     if (confirm('Delete this duty record?')) {
-      await deleteDoc(doc(db, 'schedules', id));
+      try {
+        await deleteDoc(doc(db, 'schedules', idStr));
+        setIsModalOpen(false);
+        setEditingSchedule(null);
+      } catch (error) {
+        handleFirestoreError(error, OperationType.DELETE, 'schedules');
+      }
     }
   };
 
@@ -423,11 +571,19 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
   const firstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
 
   const handlePrevMonth = () => {
-    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+    if (viewMode === 'gantt' && ganttZoom === 'quarter') {
+      setCurrentDate(new Date(currentDate.getFullYear() - 1, currentDate.getMonth(), 1));
+    } else {
+      setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+    }
   };
 
   const handleNextMonth = () => {
-    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+    if (viewMode === 'gantt' && ganttZoom === 'quarter') {
+      setCurrentDate(new Date(currentDate.getFullYear() + 1, currentDate.getMonth(), 1));
+    } else {
+      setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+    }
   };
 
   const handlePrevWeek = () => {
@@ -500,10 +656,18 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                   {activeSchedules.map(s => {
                     const p = personnel.find(pers => pers.id === s.personnelId);
                     if (!p) return null;
+                    const isSim = s.id.startsWith('sim-');
                     return (
                       <div key={s.id} className="flex items-start justify-between gap-2 bg-slate-50 p-1.5 rounded-lg border border-slate-100">
                         <div className="min-w-0 flex-1">
-                          <p className="text-[10px] font-bold text-black truncate uppercase leading-tight">{p.fullName}</p>
+                          <p className="text-[10px] font-bold text-black truncate uppercase leading-tight flex items-center gap-1">
+                            <span>{p.fullName}</span>
+                            {isSim && (
+                              <span className="text-[6px] text-indigo-600 font-black uppercase bg-indigo-50 border border-indigo-200 px-1 py-0.5 rounded leading-none shrink-0">
+                                Sim
+                              </span>
+                            )}
+                          </p>
                           <p className="text-[8px] text-slate-500 uppercase truncate leading-tight italic">{p.rosterGroup} • {p.title}</p>
                         </div>
                         <span className={cn(
@@ -525,7 +689,12 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
  
           <div className="flex items-center justify-between mb-1 relative z-10">
              <span className={cn("text-[10px] font-mono", isToday ? "text-emerald-600 font-black" : "text-black")}>{day}</span>
-             {!isGuest && (
+             {isGuest ? (
+               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                 <button onClick={(e) => { e.stopPropagation(); handleOpenAdd(dateStr, undefined, true); }} className="p-0.5 hover:text-indigo-600 text-indigo-400 transition-colors" title="Simulate Duty"><Plus size={10} /></button>
+                 <button onClick={(e) => { e.stopPropagation(); handleOpenAddEvent(dateStr, true); }} className="p-0.5 hover:text-purple-600 text-purple-400 transition-colors" title="Simulate Event"><Tag size={8} /></button>
+               </div>
+             ) : (
                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                  <button onClick={(e) => { e.stopPropagation(); handleOpenAdd(dateStr); }} className="p-0.5 hover:text-blue-600 text-slate-400 transition-colors" title="Add Duty"><Plus size={10} /></button>
                  <button onClick={(e) => { e.stopPropagation(); handleOpenAddEvent(dateStr); }} className="p-0.5 hover:text-emerald-600 text-slate-400 transition-colors" title="Add Event"><Tag size={8} /></button>
@@ -559,19 +728,19 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
             })}
             {activeSchedules.map(s => {
               const person = personnel.find(p => p.id === s.personnelId);
+              const isSim = s.id.startsWith('sim-');
               return (
                 <div 
                   key={s.id} 
                   onClick={(e) => { e.stopPropagation(); handleEdit(s); }}
                   className={cn(
-                    "text-[8px] px-1.5 py-1 rounded-md truncate font-black uppercase tracking-tighter shadow-sm flex items-center gap-1.5 text-white border border-white/10 transition-colors",
-                    getGroupColor(person?.rosterGroup || ''),
-                    getStatusColor(s.status),
-                    isGuest ? "cursor-default" : "cursor-pointer hover:border-white/30"
+                    "text-[8px] px-1.5 py-1 rounded-md truncate font-black uppercase tracking-tighter flex items-center gap-1.5 border transition-colors",
+                    getScheduleStyle(s, person?.rosterGroup || ''),
+                    (isGuest && !isSim) ? "cursor-default" : "cursor-pointer hover:scale-[1.02]"
                   )}
                 >
-                  <span className="w-1.5 h-1.5 rounded-full bg-white/40 shrink-0" />
-                  {person?.fullName || 'Crew'}
+                  <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", isSim ? "bg-indigo-600 animate-pulse" : "bg-white/40")} />
+                  <span>{person?.fullName || 'Crew'}{isSim ? ' (Simulation)' : ''}</span>
                 </div>
               );
             })}
@@ -624,12 +793,21 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
             >
               <div className={cn("w-full h-1 absolute top-0 left-0 rounded-t-xl", getGroupColor(hoveredWeekItem.personnel?.rosterGroup || ''))} />
               <div className="flex items-center justify-between mb-1">
-                <p className="text-[10px] font-black text-black uppercase">{hoveredWeekItem.personnel?.fullName || 'Crew Member'}</p>
+                <p className="text-[10px] font-black text-black uppercase flex items-center gap-1">
+                  <span>{hoveredWeekItem.personnel?.fullName || 'Crew Member'}</span>
+                  {hoveredWeekItem.schedule.id.startsWith('sim-') && (
+                    <span className="text-[6px] text-indigo-600 font-extrabold uppercase bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded leading-none shrink-0">
+                      Simulation
+                    </span>
+                  )}
+                </p>
                 <span className={cn(
                   "text-[8px] px-1.5 py-0.5 rounded font-black text-white",
-                  hoveredWeekItem.schedule.status === 'TRANSIT' ? "bg-blue-600" : "bg-emerald-600"
+                  hoveredWeekItem.schedule.id.startsWith('sim-') 
+                    ? "bg-indigo-600/90 shadow-md shadow-indigo-500/20" 
+                    : (hoveredWeekItem.schedule.status === 'TRANSIT' ? "bg-blue-600" : "bg-emerald-600")
                 )}>
-                  {hoveredWeekItem.schedule.status}
+                  {hoveredWeekItem.schedule.id.startsWith('sim-') ? 'SIMULATED' : hoveredWeekItem.schedule.status}
                 </span>
               </div>
               <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tight mb-2 italic">
@@ -645,8 +823,8 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                   <span className="text-black">{formatDate(hoveredWeekItem.schedule.endDate)}</span>
                 </div>
               </div>
-              {!isGuest && (
-                <p className="text-[7px] text-blue-400 mt-2 font-black uppercase text-center border-t border-white/5 pt-1.5 border-dashed">Click to edit details</p>
+              {(!isGuest || hoveredWeekItem.schedule.id.startsWith('sim-')) && (
+                <p className="text-[7px] text-indigo-500 mt-2 font-black uppercase text-center border-t border-white/5 pt-1.5 border-dashed">Click to edit details</p>
               )}
             </motion.div>
           )}
@@ -666,7 +844,12 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
             <div className={cn("bg-slate-50 py-2 text-center border-b border-slate-200 relative", isToday ? "bg-emerald-100" : "")}>
               <p className={cn("text-[10px] font-bold uppercase", isToday ? "text-emerald-700" : "text-slate-600")}>{date.toLocaleDateString('default', { weekday: 'short' })}</p>
               <p className={cn("text-[14px] font-mono", isToday ? "text-emerald-700 font-black" : "text-black")}>{date.getDate()}</p>
-              {!isGuest && (
+              {isGuest ? (
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button onClick={() => handleOpenAdd(dateStr, undefined, true)} className="p-1 hover:text-indigo-600 text-indigo-400" title="Simulate Duty"><Plus size={12} /></button>
+                  <button onClick={() => handleOpenAddEvent(dateStr, true)} className="p-1 hover:text-purple-600 text-purple-400" title="Simulate Event"><Tag size={10} /></button>
+                </div>
+              ) : (
                 <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button onClick={() => handleOpenAdd(dateStr)} className="p-1 hover:text-blue-600 text-slate-400" title="Add Duty"><Plus size={12} /></button>
                   <button onClick={() => handleOpenAddEvent(dateStr)} className="p-1 hover:text-emerald-600 text-slate-400" title="Add Event"><Tag size={10} /></button>
@@ -697,8 +880,8 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                       <p className="text-slate-500 leading-tight">{ev.description || 'No description provided'}</p>
                       <p className="text-[7px] text-slate-400 mt-2 font-mono uppercase">{formatDate(ev.startDate)} - {formatDate(ev.endDate)}</p>
                     </div>
-                    {!isGuest && (
-                      <button onClick={(e) => handleDeleteEvent(ev.id, e)} className="opacity-0 group-hover/event:opacity-100 hover:text-rose-500 text-slate-700 transition-opacity">
+                    {(!isGuest || ev.id.startsWith('sim-')) && (
+                      <button onClick={(e) => handleDeleteEvent(ev.id, e)} className={cn("opacity-0 group-hover/event:opacity-100 transition-opacity", ev.id.startsWith('sim-') ? "text-indigo-600 hover:text-rose-600" : "hover:text-rose-500 text-slate-700")}>
                         <Trash2 size={10} />
                       </button>
                     )}
@@ -707,6 +890,7 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
               })}
               {filteredSchedules.filter(s => dateStr >= s.startDate && dateStr <= s.endDate).map(s => {
                 const person = personnel.find(p => p.id === s.personnelId);
+                const isSim = s.id.startsWith('sim-');
                 return (
                   <div 
                     key={s.id} 
@@ -722,17 +906,18 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                     }}
                     onMouseLeave={() => setHoveredWeekItem(null)}
                     className={cn(
-                      "p-2 rounded-lg text-[9px] font-black uppercase tracking-widest text-white shadow-md border border-white/10 transition-all relative group",
-                      getGroupColor(person?.rosterGroup || ''),
-                      getStatusColor(s.status),
-                      isGuest ? "cursor-default" : "cursor-pointer hover:border-white/30"
+                      "p-2 rounded-lg text-[9px] font-black uppercase tracking-widest border transition-all relative group",
+                      getScheduleStyle(s, person?.rosterGroup || ''),
+                      (isGuest && !isSim) ? "cursor-default" : "cursor-pointer hover:scale-[1.02]"
                     )}
                   >
                     <div className="flex items-center justify-between mb-1">
-                      <span>{person?.fullName || 'Crew'}</span>
-                      <span className="text-[7px] bg-white/20 px-1 rounded">{s.status}</span>
+                      <span className="truncate">{person?.fullName || 'Crew'}{isSim ? ' (Simulation)' : ''}</span>
+                      <span className={cn("text-[7px] px-1 rounded-sm", isSim ? "bg-indigo-600/25 text-indigo-900 border border-indigo-500/30 font-extrabold" : "bg-white/20 text-white")}>
+                        {isSim ? 'SIM' : s.status}
+                      </span>
                     </div>
-                    <p className="text-[7px] opacity-70 font-mono italic">{formatDate(s.startDate)} - {formatDate(s.endDate)}</p>
+                    <p className="text-[7px] opacity-75 font-mono italic">{formatDate(s.startDate)} - {formatDate(s.endDate)}</p>
                   </div>
                 );
               })}
@@ -773,10 +958,10 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                       {getEventIcon(ev.type, 10)}
                       <p className={cn("text-[8px] font-black uppercase tracking-widest", colors.text)}>{ev.type}</p>
                     </div>
-                    {!isGuest && (
+                    {(!isGuest || ev.id.startsWith('sim-')) && (
                       <button 
                         onClick={(e) => handleDeleteEvent(ev.id, e)}
-                        className="text-slate-800 hover:text-rose-500 opacity-0 group-hover/item:opacity-100 mt-[-4px]"
+                        className={cn("opacity-0 group-hover/item:opacity-100 mt-[-4px]", ev.id.startsWith('sim-') ? "text-indigo-400 hover:text-rose-400" : "text-slate-800 hover:text-rose-500")}
                       >
                         <Trash2 size={10} />
                       </button>
@@ -802,7 +987,15 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
             <div className="w-48 shrink-0">
               <div className="flex items-center justify-between">
                 <h4 className="text-sm font-bold text-[var(--theme-text)] uppercase tracking-tight">{p.fullName}</h4>
-                {!isGuest && (
+                {isGuest ? (
+                  <button 
+                    onClick={() => handleOpenAdd(undefined, p.id, true)}
+                    className="p-1 text-indigo-400 hover:text-indigo-600 opacity-0 group-hover:opacity-100"
+                    title="Simulate Duty Assignment"
+                  >
+                    <Plus size={14} />
+                  </button>
+                ) : (
                   <button 
                     onClick={() => handleOpenAdd(undefined, p.id)}
                     className="p-1 text-slate-600 hover:text-blue-400 opacity-0 group-hover:opacity-100"
@@ -828,40 +1021,50 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                   <span className="text-[9px] text-slate-600 uppercase italic font-bold tracking-widest">No duty cycles assigned</span>
                 </div>
               ) : (
-                pSchedules.map(s => (
-                  <div 
-                    key={s.id} 
-                    onClick={() => handleEdit(s)}
-                    className={cn(
-                      "bg-slate-50 border border-slate-200 px-4 py-3 rounded-xl shrink-0 min-w-[160px] relative overflow-hidden group/item transition-all shadow-sm",
-                      isGuest ? "cursor-default" : "cursor-pointer hover:border-blue-200 hover:bg-white"
-                    )}
-                  >
-                    <div className={cn(
-                      "absolute left-0 top-0 bottom-0 w-1",
-                      s.status === 'ON_DUTY' ? "bg-emerald-500" : s.status === 'TRANSIT' ? "bg-blue-500" : "bg-slate-700"
-                    )} />
-                    <div className="flex justify-between items-start mb-2">
-                      <p className="text-[8px] font-black text-slate-500 uppercase tracking-[0.2em]">{s.status}</p>
-                      {!isGuest && (
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); handleDelete(s.id); }}
-                          className="text-slate-300 hover:text-rose-500 opacity-0 group-hover/item:opacity-100 mt-[-4px]"
-                        >
-                          <Trash2 size={10} />
-                        </button>
+                pSchedules.map(s => {
+                  const isSim = s.id.startsWith('sim-');
+                  return (
+                    <div 
+                      key={s.id} 
+                      onClick={() => handleEdit(s)}
+                      className={cn(
+                        "border px-4 py-3 rounded-xl shrink-0 min-w-[160px] relative overflow-hidden group/item transition-all shadow-sm",
+                        isSim 
+                          ? `${getScheduleStyle(s, p.rosterGroup)} relative overflow-hidden bg-white/5` 
+                          : "bg-slate-50 border-slate-200 text-slate-800",
+                        (isGuest && !isSim) ? "cursor-default" : "cursor-pointer hover:border-blue-200 hover:bg-white"
                       )}
+                    >
+                      {!isSim && (
+                        <div className={cn(
+                          "absolute left-0 top-0 bottom-0 w-1",
+                          s.status === 'ON_DUTY' ? "bg-emerald-500" : s.status === 'TRANSIT' ? "bg-blue-500" : "bg-slate-700"
+                        )} />
+                      )}
+                      <div className="flex justify-between items-start mb-2">
+                        <p className={cn("text-[8px] font-black uppercase tracking-[0.2em]", isSim ? "text-indigo-900" : "text-slate-500")}>
+                          {s.status} {isSim && <span className="text-indigo-600 font-extrabold">(SIM)</span>}
+                        </p>
+                        {(!isGuest || isSim) && (
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); handleDelete(s.id); }}
+                            className={cn("opacity-0 group-hover/item:opacity-100 mt-[-4px]", isSim ? "text-indigo-600 hover:text-rose-600" : "text-slate-300 hover:text-rose-500")}
+                          >
+                            <Trash2 size={10} />
+                          </button>
+                        )}
+                      </div>
+                      <div className="flex flex-col gap-1">
+                         <p className="text-[11px] font-mono font-black flex items-center gap-2">
+                           <span className={cn("text-[9px] font-bold", isSim ? "text-slate-700 font-bold" : "text-slate-400")}>START:</span> {formatDate(s.startDate)}
+                         </p>
+                         <p className="text-[11px] font-mono font-black flex items-center gap-2 border-t border-slate-100 pt-1 mt-1">
+                           <span className={cn("text-[9px] font-bold", isSim ? "text-slate-700 font-bold" : "text-slate-400")}>END:</span> {formatDate(s.endDate)}
+                         </p>
+                      </div>
                     </div>
-                    <div className="flex flex-col gap-1">
-                       <p className="text-[11px] text-[#1E293B] font-mono font-black flex items-center gap-2">
-                         <span className="text-slate-400 text-[9px] font-bold">START:</span> {formatDate(s.startDate)}
-                       </p>
-                       <p className="text-[11px] text-[#1E293B] font-mono font-black flex items-center gap-2 border-t border-slate-100 pt-1 mt-1">
-                         <span className="text-slate-400 text-[9px] font-bold">END:</span> {formatDate(s.endDate)}
-                       </p>
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
@@ -871,6 +1074,501 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
   );
 
   const renderGanttView = () => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    
+    // Only show the target month during export to keep the PDF focused
+    const monthsToShow = isExporting ? [new Date(year, month, 1)] : [
+      new Date(year, month - 1, 1),
+      new Date(year, month, 1),
+      new Date(year, month + 1, 1)
+    ];
+
+    let colWidth = 32;
+    let gridStartMs = 0;
+    let gridEndMs = 0;
+    let durationMs = 0;
+    let totalColumns = 0;
+
+    let colDatesHeaderHtml: React.ReactNode = null;
+    let colPeriodHeaderHtml: React.ReactNode = null;
+    let todayLineHtml: React.ReactNode = null;
+    let gridLinesHtml: React.ReactNode = null;
+
+    // To parse local YYYY-MM-DD date strings uniformly across browsers (prevents Safari/Firefox issues)
+    const parseLocalDate = (dateStr: string, timeSuffix: 'start' | 'end') => {
+      const [y, m, d] = dateStr.split('-').map(Number);
+      if (timeSuffix === 'start') {
+        return new Date(y, m - 1, d, 0, 0, 0, 0).getTime();
+      } else {
+        return new Date(y, m - 1, d, 23, 59, 59, 999).getTime();
+      }
+    };
+
+    if (ganttZoom === 'days') {
+      colWidth = 32;
+      const timelineDates: { date: Date, dateStr: string, isToday: boolean }[] = [];
+      
+      monthsToShow.forEach(m => {
+         const days = daysInMonth(m.getFullYear(), m.getMonth());
+         for(let i=1; i<=days; i++) {
+           const d = new Date(m.getFullYear(), m.getMonth(), i);
+           const dateStr = toLocalDateStr(d);
+           timelineDates.push({ date: d, dateStr, isToday: dateStr === todayStr });
+         }
+      });
+
+      totalColumns = timelineDates.length;
+      gridStartMs = parseLocalDate(toLocalDateStr(timelineDates[0].date), 'start');
+      gridEndMs = parseLocalDate(toLocalDateStr(timelineDates[timelineDates.length - 1].date), 'end');
+      durationMs = gridEndMs - gridStartMs;
+
+      colDatesHeaderHtml = (
+        <div className="flex-1 flex overflow-hidden">
+          {monthsToShow.map(m => {
+            const days = daysInMonth(m.getFullYear(), m.getMonth());
+            return (
+              <div key={m.getTime()} style={{ width: days * colWidth }} className="shrink-0 text-center text-[9px] font-black text-black py-3 bg-slate-50/50 border-r border-slate-200 uppercase">
+                {m.toLocaleString('default', { month: 'long', year: 'numeric' })}
+              </div>
+            );
+          })}
+        </div>
+      );
+
+      colPeriodHeaderHtml = (
+        <div className="flex-1 flex">
+          {timelineDates.map(({ date, isToday }, i) => (
+            <div key={i} style={{ width: colWidth }} className={cn(
+              "shrink-0 text-center text-[8px] font-bold py-1.5 border-r border-slate-200 relative",
+              isToday ? "bg-emerald-500/20 text-emerald-600" : (date.getDay() === 0 || date.getDay() === 6 ? "bg-slate-50 text-slate-400" : "text-black")
+            )}>
+              {date.getDate()}
+              {isToday && (
+                <div className="absolute top-0 left-0 w-full h-0.5 bg-emerald-500 animate-pulse" />
+              )}
+            </div>
+          ))}
+        </div>
+      );
+
+      gridLinesHtml = (
+        <div className="absolute inset-0 pointer-events-none flex" style={{ left: 192 }}>
+          {timelineDates.map((_, i) => (
+            <div key={i} style={{ width: colWidth }} className="h-full border-r border-slate-200 shrink-0 opacity-45" />
+          ))}
+        </div>
+      );
+    } else if (ganttZoom === 'weeks') {
+      colWidth = 110;
+      
+      const getMonday = (d: Date) => {
+        const date = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+        const day = date.getDay();
+        const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+        return new Date(date.setDate(diff));
+      };
+
+      const firstMonthDate = monthsToShow[0];
+      const lastMonthDate = monthsToShow[monthsToShow.length - 1];
+      const lastDayOfLastMonth = new Date(lastMonthDate.getFullYear(), lastMonthDate.getMonth() + 1, 0);
+
+      const gridStart = getMonday(firstMonthDate);
+      const gridEnd = getMonday(lastDayOfLastMonth);
+      gridEnd.setDate(gridEnd.getDate() + 6); // End of week on Sunday
+
+      gridStartMs = gridStart.getTime();
+      gridEndMs = gridEnd.getTime() + 24 * 60 * 60 * 1000 - 1;
+      durationMs = gridEndMs - gridStartMs;
+
+      const timelineWeeks: { startDate: Date; endDate: Date; label: string; dateRangeStr: string; weekNum: number; isCurrent: boolean }[] = [];
+      const todayTime = new Date().getTime();
+
+      let curr = new Date(gridStart);
+      while (curr <= gridEnd) {
+        const wStart = new Date(curr);
+        const wEnd = new Date(curr);
+        wEnd.setDate(wEnd.getDate() + 6);
+
+        // Standard ISO week number
+        const tempDate = new Date(wStart.valueOf());
+        tempDate.setDate(tempDate.getDate() + 4 - (tempDate.getDay() || 7));
+        const yearStart = new Date(tempDate.getFullYear(), 0, 1);
+        const weekNum = Math.ceil((((tempDate.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+
+        const isCurrent = todayTime >= wStart.getTime() && todayTime <= (wEnd.getTime() + 24 * 60 * 60 * 1000);
+
+        timelineWeeks.push({
+          startDate: wStart,
+          endDate: wEnd,
+          label: `Wk ${weekNum}`,
+          dateRangeStr: `${wStart.toLocaleString('default', { month: 'short' })} ${wStart.getDate()} - ${wEnd.toLocaleString('default', { month: 'short' })} ${wEnd.getDate()}`,
+          weekNum,
+          isCurrent
+        });
+
+        curr.setDate(curr.getDate() + 7);
+      }
+
+      totalColumns = timelineWeeks.length;
+
+      // Group weeks into month header segments
+      const weeksByMonth: { key: string; monthLabel: string; count: number }[] = [];
+      timelineWeeks.forEach(w => {
+        const m = w.startDate;
+        const label = m.toLocaleString('default', { month: 'long', year: 'numeric' });
+        const key = `${m.getFullYear()}-${m.getMonth()}`;
+        if (weeksByMonth.length === 0 || weeksByMonth[weeksByMonth.length - 1].key !== key) {
+          weeksByMonth.push({ key, monthLabel: label, count: 1 });
+        } else {
+          weeksByMonth[weeksByMonth.length - 1].count++;
+        }
+      });
+
+      colDatesHeaderHtml = (
+        <div className="flex-1 flex overflow-hidden">
+          {weeksByMonth.map(segment => (
+            <div key={segment.key} style={{ width: segment.count * colWidth }} className="shrink-0 text-center text-[9px] font-black text-black py-3 bg-slate-50/50 border-r border-slate-200 uppercase">
+              {segment.monthLabel}
+            </div>
+          ))}
+        </div>
+      );
+
+      colPeriodHeaderHtml = (
+        <div className="flex-1 flex">
+          {timelineWeeks.map((w, i) => (
+            <div key={i} style={{ width: colWidth }} className={cn(
+              "shrink-0 text-center py-1 border-r border-slate-200 relative flex flex-col justify-center items-center leading-normal",
+              w.isCurrent ? "bg-emerald-500/10 text-emerald-700" : "text-black bg-white"
+            )}>
+              <span className="text-[9px] font-black tracking-widest uppercase">{w.label}</span>
+              <span className="text-[7px] text-slate-500 font-mono tracking-tighter whitespace-nowrap">{w.dateRangeStr}</span>
+              {w.isCurrent && (
+                <div className="absolute top-0 left-0 w-full h-0.5 bg-emerald-500 animate-pulse" />
+              )}
+            </div>
+          ))}
+        </div>
+      );
+
+      gridLinesHtml = (
+        <div className="absolute inset-0 pointer-events-none flex" style={{ left: 192 }}>
+          {timelineWeeks.map((_, i) => (
+            <div key={i} style={{ width: colWidth }} className="h-full border-r border-slate-200 shrink-0 opacity-45" />
+          ))}
+        </div>
+      );
+    } else {
+      colWidth = 110;
+      const yearVal = currentDate.getFullYear();
+      
+      const startD = new Date(yearVal, 0, 1, 0, 0, 0, 0);
+      const endD = new Date(yearVal, 11, 31, 23, 59, 59, 999);
+      
+      gridStartMs = startD.getTime();
+      gridEndMs = endD.getTime();
+      durationMs = gridEndMs - gridStartMs;
+
+      const timelineMonths: { startDate: Date; endDate: Date; label: string; monthIdx: number; isCurrent: boolean }[] = [];
+      const todayObj = new Date();
+      const currentMonthVal = todayObj.getMonth();
+      const currentYearVal = todayObj.getFullYear();
+
+      for (let m = 0; m < 12; m++) {
+        const sm = new Date(yearVal, m, 1);
+        const em = new Date(yearVal, m + 1, 0);
+        const isCurrent = yearVal === currentYearVal && m === currentMonthVal;
+        
+        timelineMonths.push({
+          startDate: sm,
+          endDate: em,
+          label: sm.toLocaleString('default', { month: 'short' }),
+          monthIdx: m,
+          isCurrent
+        });
+      }
+
+      totalColumns = 12;
+
+      const quarters = [
+        { label: `Q1 ${yearVal}`, count: 3 },
+        { label: `Q2 ${yearVal}`, count: 3 },
+        { label: `Q3 ${yearVal}`, count: 3 },
+        { label: `Q4 ${yearVal}`, count: 3 }
+      ];
+
+      colDatesHeaderHtml = (
+        <div className="flex-1 flex overflow-hidden">
+          {quarters.map((q, idx) => (
+            <div key={idx} style={{ width: q.count * colWidth }} className="shrink-0 text-center text-[9px] font-black text-black py-3 bg-slate-50/50 border-r border-slate-200 uppercase">
+              {q.label}
+            </div>
+          ))}
+        </div>
+      );
+
+      colPeriodHeaderHtml = (
+        <div className="flex-1 flex">
+          {timelineMonths.map((m, i) => (
+            <div key={i} style={{ width: colWidth }} className={cn(
+              "shrink-0 text-center py-2 border-r border-slate-200 relative flex flex-col justify-center items-center font-black uppercase text-[8px]",
+              m.isCurrent ? "bg-emerald-500/15 text-emerald-700" : "text-black bg-white"
+            )}>
+              {m.label}
+              {m.isCurrent && (
+                <div className="absolute top-0 left-0 w-full h-0.5 bg-emerald-500 animate-pulse" />
+              )}
+            </div>
+          ))}
+        </div>
+      );
+
+      gridLinesHtml = (
+        <div className="absolute inset-0 pointer-events-none flex" style={{ left: 192 }}>
+          {timelineMonths.map((_, i) => (
+            <div key={i} style={{ width: colWidth }} className="h-full border-r border-slate-200 shrink-0 opacity-45" />
+          ))}
+        </div>
+      );
+    }
+
+    const totalGridWidth = totalColumns * colWidth;
+
+    todayLineHtml = (() => {
+      const nowMs = Date.now();
+      if (nowMs < gridStartMs || nowMs > gridEndMs) return null;
+      const todayPercent = (nowMs - gridStartMs) / durationMs;
+      const leftPx = 192 + todayPercent * totalGridWidth;
+      return (
+        <div 
+          className="absolute top-0 bottom-0 z-20 w-px bg-emerald-500/40 pointer-events-none"
+          style={{ left: leftPx }}
+        >
+          <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full -ml-[3px] mt-[42px] animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
+        </div>
+      );
+    })();
+
+    return (
+      <div className="flex flex-col gap-4">
+        {/* Gantt View Scale Controls */}
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-[var(--theme-card)] border border-[var(--theme-border)] p-3 rounded-2xl">
+          <div className="flex items-center gap-2">
+            <LayoutGrid size={14} className="text-indigo-500" />
+            <span className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] font-black">Gantt Scale</span>
+          </div>
+          <div className="flex bg-[var(--theme-container)] p-1 rounded-xl gap-1 border border-[var(--theme-border)]">
+            {(['days', 'weeks', 'quarter'] as const).map(zoomVal => (
+              <button
+                key={zoomVal}
+                onClick={() => setGanttZoom(zoomVal)}
+                className={cn(
+                  "px-3.5 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all",
+                  ganttZoom === zoomVal 
+                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/10" 
+                    : "text-slate-500 hover:text-slate-300 hover:bg-white/5"
+                )}
+              >
+                {zoomVal}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Chart Body */}
+        <div className="overflow-x-auto custom-scrollbar border rounded-xl relative" ref={ganttRef} style={{ backgroundColor: 'var(--theme-container)', borderColor: 'var(--theme-border)', maxHeight: '700px', overflowY: 'auto' }}>
+          <div style={{ width: totalGridWidth + 192 }}>
+            {/* Header */}
+            <div className="flex border-b border-slate-200 bg-white sticky top-0 z-40">
+              <div className="w-48 shrink-0 border-r border-slate-200 p-3 text-[10px] font-black text-black bg-slate-50 uppercase tracking-widest sticky left-0 z-50">Crew Roster</div>
+              {colDatesHeaderHtml}
+            </div>
+            <div className="flex border-b border-slate-200 bg-white sticky top-[42px] z-40">
+              <div className="w-48 shrink-0 border-r border-slate-200 sticky left-0 z-50 bg-white"></div>
+              {colPeriodHeaderHtml}
+            </div>
+
+            {/* Today Indicator Line (Full Height) */}
+            {todayLineHtml}
+
+            {/* Rows */}
+            <div className="divide-y divide-slate-200 relative">
+              {/* Vertical Separators Grid */}
+              {gridLinesHtml}
+
+              {/* Integrated Rows */}
+              {sortedPersonnel.map(p => {
+                if (p.id === 'HUB_EVENTS') {
+                  return (
+                    <div key="HUB_EVENTS" className="flex group hover:bg-slate-50 relative z-20">
+                      <div className="w-48 shrink-0 border-r border-slate-200 p-3 bg-slate-50 sticky left-0 z-30">
+                        <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-2">
+                          <Tag size={12} /> Hub Events
+                        </p>
+                        <p className="text-[8px] text-slate-500 font-mono uppercase mt-1">General Schedule</p>
+                      </div>
+                      <div className="flex-1 relative flex h-14 items-center">
+                        {events.map(ev => {
+                          const colors = eventTypeColors[ev.type] || eventTypeColors.general;
+                          const itemStartMs = parseLocalDate(ev.startDate, 'start');
+                          const itemEndMs = parseLocalDate(ev.endDate, 'end');
+                          
+                          if (itemEndMs < gridStartMs || itemStartMs > gridEndMs) return null;
+
+                          let leftPercent = (itemStartMs - gridStartMs) / durationMs;
+                          let widthPercent = (itemEndMs - itemStartMs + 1000) / durationMs;
+
+                          if (leftPercent < 0) {
+                            widthPercent = widthPercent + leftPercent;
+                            leftPercent = 0;
+                          }
+                          if (leftPercent + widthPercent > 1) {
+                            widthPercent = 1 - leftPercent;
+                          }
+
+                          const left = leftPercent * totalGridWidth;
+                          const width = Math.max(widthPercent * totalGridWidth, 12);
+                          const showText = width > 45;
+
+                          return (
+                            <div 
+                              key={ev.id}
+                              style={{ left, width }}
+                              onClick={(e) => { e.stopPropagation(); handleEditEvent(ev); }}
+                              className={cn(
+                                "absolute h-8 rounded-lg flex items-center gap-2 px-3 border cursor-pointer hover:scale-[1.02] transition-all z-10 group/ev text-white overflow-hidden",
+                                colors.border, colors.bg, colors.text
+                              )}
+                            >
+                              {getEventIcon(ev.type, 10)}
+                              {showText && (
+                                <span className="text-[9px] font-black uppercase tracking-widest truncate">{ev.title}</span>
+                              )}
+                              
+                              {/* Enhanced Tooltip for Hub Events */}
+                              <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-56 bg-white border border-slate-200 p-3 rounded-xl shadow-2xl opacity-0 group-hover/ev:opacity-100 invisible group-hover/ev:visible transition-all z-50 pointer-events-none text-slate-800">
+                                 <div className={cn("w-full h-1 absolute top-0 left-0 rounded-t-xl", colors.solid)} />
+                                 <div className="flex items-center justify-between mb-1">
+                                   <p className="text-[10px] font-black text-black uppercase">{ev.title}</p>
+                                   <span className={cn("text-[8px] font-black uppercase tracking-tighter", colors.text)}>{ev.type}</span>
+                                 </div>
+                                 <p className="text-[9px] text-slate-500 leading-tight mb-2 italic">
+                                   {ev.description || 'Global hub-wide event'}
+                                 </p>
+                                 <div className="flex items-center gap-2 text-[9px] font-mono border-t border-slate-100 pt-2">
+                                   <CalendarIcon size={10} className={colors.text} />
+                                   <span className="text-black">{formatDate(ev.startDate)}</span>
+                                   <span className="text-slate-500">-</span>
+                                   <span className="text-black">{formatDate(ev.endDate)}</span>
+                                 </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                }
+                
+                return (
+                  <div key={p.id} className="flex group hover:bg-slate-50 relative z-10">
+                    <div className="w-48 shrink-0 border-r border-slate-200 p-3 bg-white sticky left-0 z-30">
+                      <p className="text-[10px] font-bold text-black uppercase truncate">{p.fullName}</p>
+                      <p className={cn(
+                        "text-[8px] px-1.5 rounded-sm w-fit font-mono uppercase font-black mt-0.5 text-white",
+                        getGroupColor(p.rosterGroup)
+                      )}>{p.rosterGroup}</p>
+                    </div>
+                    <div className="flex-1 relative flex h-12 items-center">
+                      {filteredSchedules.filter(s => s.personnelId === p.id).map(s => {
+                        const itemStartMs = parseLocalDate(s.startDate, 'start');
+                        const itemEndMs = parseLocalDate(s.endDate, 'end');
+                        
+                        if (itemEndMs < gridStartMs || itemStartMs > gridEndMs) return null;
+
+                        let leftPercent = (itemStartMs - gridStartMs) / durationMs;
+                        let widthPercent = (itemEndMs - itemStartMs + 1000) / durationMs;
+
+                        if (leftPercent < 0) {
+                          widthPercent = widthPercent + leftPercent;
+                          leftPercent = 0;
+                        }
+                        if (leftPercent + widthPercent > 1) {
+                          widthPercent = 1 - leftPercent;
+                        }
+
+                        const left = leftPercent * totalGridWidth;
+                        const width = Math.max(widthPercent * totalGridWidth, 12);
+                        const showDates = width > 100;
+                        const showText = width > 40;
+                        const isSim = s.id.startsWith('sim-');
+
+                        return (
+                          <div 
+                            key={s.id}
+                            style={{ left, width }}
+                            className={cn(
+                              "absolute h-7 rounded flex items-center justify-center px-1 group/bar transition-all hover:scale-[1.02] hover:z-20 border overflow-hidden",
+                              getScheduleStyle(s, p.rosterGroup),
+                              (isGuest && !isSim) ? "cursor-default" : "cursor-pointer"
+                            )}
+                            onClick={() => handleEdit(s)}
+                          >
+                            <div className="flex flex-col items-center leading-none max-w-full">
+                              {showText && (
+                                <span className={cn("font-black uppercase truncate whitespace-nowrap", showDates ? "text-[8px]" : "text-[9px]", isSim ? "text-slate-900" : "text-white")}>
+                                  {s.status === 'TRANSIT' ? 'TRANS' : s.status} {isSim ? '(Sim)' : ''}
+                                </span>
+                              )}
+                              {showDates && (
+                                <span className={cn("text-[7px] font-mono font-black border-t mt-0.5 pt-0.5 whitespace-nowrap", isSim ? "border-slate-400/40 text-slate-700" : "border-white/20 text-white")}>
+                                  {s.startDate.split('-').slice(1).join('/')} - {s.endDate.split('-').slice(1).join('/')}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Enhanced Tooltip */}
+                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-white border border-slate-200 p-3 rounded-xl shadow-2xl opacity-0 group-hover/bar:opacity-100 invisible group-hover/bar:visible transition-all z-50 pointer-events-none text-slate-800">
+                              <div className={cn("w-full h-1 absolute top-0 left-0 rounded-t-xl", getGroupColor(p.rosterGroup))} />
+                              <p className="text-[10px] font-black text-black mb-1 uppercase flex items-center gap-1">
+                                <span>{p.fullName}</span>
+                                {isSim && (
+                                  <span className="text-[6px] text-indigo-600 font-extrabold uppercase bg-indigo-50 border border-indigo-200 px-1 py-0.5 rounded leading-none shrink-0">
+                                    Simulation
+                                  </span>
+                                )}
+                              </p>
+                              <div className="flex items-center gap-2 mb-2">
+                                 <span className={cn("text-[7px] px-1.5 py-0.5 rounded font-black text-white", getGroupColor(p.rosterGroup))}>{p.rosterGroup}</span>
+                                 <span className="text-[8px] font-bold text-slate-500">{isSim ? 'SIMULATED' : s.status}</span>
+                              </div>
+                              <div className="space-y-1 text-[9px] font-mono border-t border-slate-100 pt-2 text-slate-600">
+                                <div className="flex justify-between">
+                                  <span className="text-slate-500 font-bold">START:</span>
+                                  <span className="text-black">{formatDate(s.startDate)}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-slate-500 font-bold">END:</span>
+                                  <span className="text-black">{formatDate(s.endDate)}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const oldRenderGanttView = () => {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
     
@@ -1034,37 +1732,45 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
 
                     const showDates = width > 100;
 
+                    const isSim = s.id.startsWith('sim-');
                     return (
                       <div 
                         key={s.id}
                         style={{ left, width }}
                         className={cn(
-                          "absolute h-7 rounded flex items-center justify-center px-1 group/bar border border-white/20 text-white transition-all hover:scale-[1.02] hover:z-20",
-                          getGroupColor(p.rosterGroup),
-                          getStatusColor(s.status)
+                          "absolute h-7 rounded flex items-center justify-center px-1 group/bar transition-all hover:scale-[1.02] hover:z-20 border",
+                          getScheduleStyle(s, p.rosterGroup),
+                          (isGuest && !isSim) ? "cursor-default" : "cursor-pointer"
                         )}
                         onClick={() => handleEdit(s)}
                       >
                         <div className="flex flex-col items-center leading-none">
-                          <span className={cn("text-white font-black uppercase tracking-[0.1em] whitespace-nowrap", showDates ? "text-[8px]" : "text-[9px]")}>
-                            {s.status === 'TRANSIT' ? 'TRANS' : s.status}
+                          <span className={cn("font-black uppercase tracking-[0.1em] whitespace-nowrap", showDates ? "text-[8px]" : "text-[9px]", isSim ? "text-slate-900" : "text-white")}>
+                            {s.status === 'TRANSIT' ? 'TRANS' : s.status} {isSim ? '(Simulation)' : ''}
                           </span>
                           {showDates && (
-                            <span className="text-[7px] opacity-90 font-mono font-black border-t border-white/20 mt-0.5 pt-0.5 whitespace-nowrap">
+                            <span className={cn("text-[7px] font-mono font-black border-t mt-0.5 pt-0.5 whitespace-nowrap", isSim ? "border-slate-400/40 text-slate-700" : "border-white/20 text-white")}>
                               {s.startDate.split('-').slice(1).join('/')} - {s.endDate.split('-').slice(1).join('/')}
                             </span>
                           )}
                         </div>
 
                         {/* Enhanced Tooltip */}
-                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-white border border-slate-200 p-3 rounded-xl shadow-2xl opacity-0 group-hover/bar:opacity-100 invisible group-hover/bar:visible transition-all z-50 pointer-events-none">
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-white border border-slate-200 p-3 rounded-xl shadow-2xl opacity-0 group-hover/bar:opacity-100 invisible group-hover/bar:visible transition-all z-50 pointer-events-none text-slate-800">
                           <div className={cn("w-full h-1 absolute top-0 left-0 rounded-t-xl", getGroupColor(p.rosterGroup))} />
-                          <p className="text-[10px] font-black text-black mb-1 uppercase">{p.fullName}</p>
+                          <p className="text-[10px] font-black text-black mb-1 uppercase flex items-center gap-1">
+                            <span>{p.fullName}</span>
+                            {isSim && (
+                              <span className="text-[6px] text-indigo-600 font-extrabold uppercase bg-indigo-50 border border-indigo-200 px-1 py-0.5 rounded leading-none shrink-0">
+                                Simulation
+                              </span>
+                            )}
+                          </p>
                           <div className="flex items-center gap-2 mb-2">
                              <span className={cn("text-[7px] px-1.5 py-0.5 rounded font-black text-white", getGroupColor(p.rosterGroup))}>{p.rosterGroup}</span>
-                             <span className="text-[8px] font-bold text-slate-400">{s.status}</span>
+                             <span className="text-[8px] font-bold text-slate-500">{isSim ? 'SIMULATED' : s.status}</span>
                           </div>
-                          <div className="space-y-1 text-[9px] font-mono border-t border-slate-100 pt-2">
+                          <div className="space-y-1 text-[9px] font-mono border-t border-slate-100 pt-2 text-slate-600">
                             <div className="flex justify-between">
                               <span className="text-slate-500 font-bold">START:</span>
                               <span className="text-black">{formatDate(s.startDate)}</span>
@@ -1215,7 +1921,29 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
           </div>
 
           <div className="flex items-center gap-2 md:gap-4 shrink-0 w-full xs:w-auto justify-end">
-            {!isGuest && (
+            {isGuest ? (
+              <div className="flex gap-2 w-full xs:w-auto">
+                <div className="relative group/add flex-1 xs:flex-none">
+                  <button 
+                    onClick={() => handleOpenAdd(undefined, undefined, true)}
+                    className="w-full flex items-center justify-center gap-2 bg-[#0F172A] hover:bg-[#1E293B] text-white px-2.5 md:px-4 py-2 md:py-2.5 rounded-lg text-[7px] md:text-[10px] font-black uppercase tracking-widest transition-all shadow-lg border border-slate-700 hover:scale-[1.02]"
+                    title="Simulate Adding Crew Duty"
+                  >
+                    <Plus size={12} /> <span className="hidden sm:inline">⚡ Simulate Roster Duty</span><span className="sm:hidden">⚡ Duty</span>
+                  </button>
+                </div>
+
+                <div className="relative group/event-btn flex-1 xs:flex-none">
+                  <button 
+                    onClick={() => handleOpenAddEvent(undefined, true)}
+                    className="w-full flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-500 text-white px-2.5 md:px-4 py-2 md:py-2.5 rounded-lg text-[7px] md:text-[10px] font-black uppercase tracking-widest transition-all shadow-lg hover:scale-[1.02]"
+                    title="Simulate Adding Hub Event"
+                  >
+                    <Tag size={10} /> <span className="hidden sm:inline">⚡ Simulate Event</span><span className="sm:hidden">⚡ Event</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
               <div className="flex gap-2 w-full xs:w-auto">
                 <div className="relative group/add flex-1 xs:flex-none">
                   <button 
@@ -1528,11 +2256,7 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                   {editingSchedule && (
                     <button 
                       type="button"
-                      onClick={() => {
-                        handleDelete(editingSchedule.id);
-                        setIsModalOpen(false);
-                        setEditingSchedule(null);
-                      }}
+                      onClick={() => handleDelete(editingSchedule.id)}
                       className="px-4 py-3 rounded-xl bg-rose-900/20 border border-rose-500/20 text-rose-500 text-xs font-bold uppercase tracking-widest hover:bg-rose-900/40 transition-all flex items-center justify-center"
                       title="Delete Schedule"
                     >
@@ -1637,8 +2361,17 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                     {filteredSchedules.filter(s => selectedDayDetails >= s.startDate && selectedDayDetails <= s.endDate).map(s => {
                       const p = personnel.find(pers => pers.id === s.personnelId);
                       if (!p) return null;
+                      const isSim = s.id.startsWith('sim-');
                       return (
-                        <div key={s.id} className="p-3 rounded-xl bg-[var(--theme-status)] border border-[var(--theme-border)] group hover:border-blue-500/30 transition-all flex flex-col justify-between">
+                        <div 
+                          key={s.id} 
+                          className={cn(
+                            "p-3 rounded-xl border group transition-all flex flex-col justify-between",
+                            isSim 
+                              ? `${getScheduleStyle(s, p.rosterGroup)} relative overflow-hidden bg-white/5`
+                              : "bg-[var(--theme-status)] border-[var(--theme-border)] hover:border-blue-500/30"
+                          )}
+                        >
                            <div className="mb-4">
                               <div className="flex items-center justify-between mb-2">
                                  <span className={cn(
@@ -1648,17 +2381,21 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
                                    {p.rosterGroup}
                                  </span>
                                  <span className={cn(
-                                   "text-[8px] font-black uppercase text-white px-2 py-0.5 rounded border border-white/10",
-                                   s.status === 'TRANSIT' ? "bg-blue-600" : "bg-emerald-600"
+                                   "text-[8px] font-black uppercase px-2 py-0.5 rounded border",
+                                   isSim 
+                                     ? "bg-indigo-50 border-indigo-200 text-indigo-900 font-extrabold"
+                                     : s.status === 'TRANSIT' ? "bg-blue-600 font-black text-white border-white/10" : "bg-emerald-600 font-black text-white border-white/10"
                                  )}>
-                                   {s.status}
+                                   {isSim ? "SIMULATION" : s.status}
                                  </span>
                               </div>
-                              <h5 className="text-xs font-bold text-[var(--theme-text)] uppercase truncate">{p.fullName}</h5>
-                              <p className="text-[10px] text-[var(--theme-text-muted)] font-mono mt-0.5">{p.title}</p>
+                              <h5 className={cn("text-xs font-bold uppercase truncate", isSim ? "text-slate-900" : "text-[var(--theme-text)]")}>
+                                {p.fullName} {isSim && <span className="text-[7px] text-indigo-600 font-extrabold uppercase bg-indigo-50 px-1 py-0.5 rounded ml-1 tracking-normal border border-indigo-200">Simulation</span>}
+                              </h5>
+                              <p className={cn("text-[10px] font-mono mt-0.5", isSim ? "text-slate-700 font-semibold" : "text-[var(--theme-text-muted)]")}>{p.title}</p>
                            </div>
                            <div className="pt-3 border-t border-[var(--theme-border)] flex items-center justify-between">
-                              <p className="text-[8px] text-[var(--theme-text-muted)] font-mono italic">Ends: {formatDate(s.endDate)}</p>
+                              <p className={cn("text-[8px] font-mono italic", isSim ? "text-slate-600" : "text-[var(--theme-text-muted)]")}>Ends: {formatDate(s.endDate)}</p>
                               <button onClick={() => { setSelectedDayDetails(null); handleEdit(s); }} className="text-[9px] font-black text-blue-500 opacity-0 group-hover:opacity-100 uppercase transition-all">Go to Duty</button>
                            </div>
                         </div>
@@ -1669,7 +2406,22 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
               </div>
 
               <div className="p-6 border-t border-[var(--theme-border)] bg-[var(--theme-status)] flex gap-4">
-                 {!isGuest && (
+                 {isGuest ? (
+                   <>
+                     <button 
+                       onClick={() => { setSelectedDayDetails(null); handleOpenAdd(selectedDayDetails, undefined, true); }}
+                       className="flex-1 py-3 bg-[#0F172A] hover:bg-[#1E293B] text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-indigo-500/20"
+                     >
+                       ⚡ Simulate Duty
+                     </button>
+                     <button 
+                       onClick={() => { setSelectedDayDetails(null); handleOpenAddEvent(selectedDayDetails, true); }}
+                       className="flex-1 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-purple-500/20"
+                     >
+                       ⚡ Simulate Event
+                     </button>
+                   </>
+                 ) : (
                    <>
                      <button 
                        onClick={() => { setSelectedDayDetails(null); handleOpenAdd(selectedDayDetails); }}
