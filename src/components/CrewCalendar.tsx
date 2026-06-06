@@ -588,7 +588,7 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
         await new Promise((resolve) => setTimeout(resolve, 800));
 
         const dataUrl = await toPng(ganttRef.current!, { 
-          backgroundColor: '#0a0a0c',
+          backgroundColor: '#ffffff',
           quality: 1,
           pixelRatio: 2
         });
@@ -1431,7 +1431,7 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
         </div>
 
         {/* Chart Body */}
-        <div className="overflow-x-auto custom-scrollbar border rounded-xl relative" ref={ganttRef} style={{ backgroundColor: 'var(--theme-container)', borderColor: 'var(--theme-border)', maxHeight: isExporting ? 'none' : '700px', overflowY: isExporting ? 'visible' : 'auto' }}>
+        <div className="overflow-x-auto custom-scrollbar border rounded-xl relative" ref={ganttRef} style={{ backgroundColor: isExporting ? '#ffffff' : 'var(--theme-container)', borderColor: 'var(--theme-border)', maxHeight: isExporting ? 'none' : '700px', overflowY: isExporting ? 'visible' : 'auto' }}>
           <div style={{ width: totalGridWidth + 192 }}>
             {/* Header */}
             <div className="flex border-b border-slate-200 bg-white sticky top-0 z-40">
