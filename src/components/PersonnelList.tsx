@@ -16,6 +16,7 @@ const personnelSchema = z.object({
   title: z.string().min(2, 'Title is too short'),
   email: z.string().email('Invalid email address'),
   rosterGroup: z.string().min(1, 'Roster Group is required'),
+  company: z.string().optional(),
   lat: z.any().optional(),
   lng: z.any().optional(),
 });
@@ -73,6 +74,7 @@ export function PersonnelList({ isGuest }: PersonnelListProps) {
     setValue('title', p.title);
     setValue('email', p.email);
     setValue('rosterGroup', p.rosterGroup);
+    setValue('company', p.company || '');
     setValue('lat', p.lat);
     setValue('lng', p.lng);
     setIsModalOpen(true);
@@ -97,7 +99,8 @@ export function PersonnelList({ isGuest }: PersonnelListProps) {
   const filteredPersonnel = personnel.filter(p => 
     p.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
     p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    p.rosterGroup.toLowerCase().includes(searchQuery.toLowerCase())
+    p.rosterGroup.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (p.company && p.company.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   return (
@@ -208,6 +211,12 @@ export function PersonnelList({ isGuest }: PersonnelListProps) {
                     <Database size={10} className="text-blue-400" />
                     <span>GROUP: <span className="text-[var(--theme-text)]">{p.rosterGroup}</span></span>
                   </div>
+                  {p.company && (
+                    <div className="flex items-center gap-3 text-[9px] text-[var(--theme-text-muted)] font-black uppercase tracking-widest bg-[var(--theme-status)] p-2.5 rounded-xl">
+                      <Briefcase size={10} className="text-blue-400" />
+                      <span>COMPANY: <span className="text-[var(--theme-text)]">{p.company}</span></span>
+                    </div>
+                  )}
                   <div className="flex items-center gap-3 text-[10px] text-[var(--theme-text-muted)] font-medium px-1">
                     <Mail size={11} className="text-[var(--theme-text-muted)] opacity-50" />
                     <span className="truncate">{p.email}</span>
@@ -265,6 +274,11 @@ export function PersonnelList({ isGuest }: PersonnelListProps) {
                     <option value="Others">Others</option>
                   </select>
                   {errors.rosterGroup && <p className="text-[10px] text-rose-500 font-bold mt-1 px-1">{errors.rosterGroup.message}</p>}
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] text-[var(--theme-text-muted)] uppercase font-black tracking-widest px-1">Company</label>
+                  <input {...register('company')} placeholder="Enterprise name" className="w-full bg-[var(--theme-status)] border border-[var(--theme-border)] px-5 py-3.5 text-sm text-[var(--theme-text)] rounded-2xl focus:outline-none focus:border-blue-500/30 transition-all font-medium" />
+                  {errors.company && <p className="text-[10px] text-rose-500 font-bold mt-1 px-1">{errors.company.message}</p>}
                 </div>
 
                 <div className="grid grid-cols-2 gap-5">

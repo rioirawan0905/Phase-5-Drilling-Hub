@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, MouseEvent, useRef } from 'react';
 import { collection, onSnapshot, query, addDoc, updateDoc, doc, deleteDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Personnel, Scheduling, ScheduleStatus, HubEvent } from '../types';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Users, Clock, LayoutGrid, Plus, Trash2, X, AlertCircle, Wrench, Info, Palmtree, Tag, Search, SortAsc, Copy, FileDown, Eye, EyeOff } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Users, Clock, LayoutGrid, Plus, Trash2, X, AlertCircle, Wrench, Info, Palmtree, Tag, Search, SortAsc, Copy, FileDown, Eye, EyeOff, Briefcase } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn, formatDate } from '../lib/utils';
 import { useForm } from 'react-hook-form';
@@ -76,6 +76,7 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
   const [sortBy, setSortBy] = useState<'name' | 'group'>('name');
   const [filterGroup, setFilterGroup] = useState<string>('ALL');
   const [filterPersonnel, setFilterPersonnel] = useState<string>('ALL');
+  const [filterCompany, setFilterCompany] = useState<string>('ALL');
   const [showGlobalEvents, setShowGlobalEvents] = useState(true);
   const [hoveredDay, setHoveredDay] = useState<string | null>(null);
   const [selectedDayDetails, setSelectedDayDetails] = useState<string | null>(null);
@@ -162,9 +163,11 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
           // Hub events only shown if personnel filter is ALL or if explicitly enabled
           if (filterPersonnel !== 'ALL') return false;
           if (filterGroup !== 'ALL' && filterGroup !== 'GLOBAL') return false;
+          if (filterCompany !== 'ALL') return false;
           return true;
         }
         if (filterGroup !== 'ALL' && p.rosterGroup !== filterGroup) return false;
+        if (filterCompany !== 'ALL' && p.company !== filterCompany) return false;
         if (filterPersonnel !== 'ALL' && p.id !== filterPersonnel) return false;
         return true;
       })
@@ -185,19 +188,21 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
         }
         return 0;
       });
-  }, [personnel, filterGroup, filterPersonnel, sortBy, showGlobalEvents]);
+  }, [personnel, filterGroup, filterPersonnel, filterCompany, sortBy, showGlobalEvents]);
 
   const filteredSchedules = useMemo(() => {
     return schedules.filter(s => {
       const p = personnel.find(person => person.id === s.personnelId);
       if (!p) return false;
       if (filterGroup !== 'ALL' && p.rosterGroup !== filterGroup) return false;
+      if (filterCompany !== 'ALL' && p.company !== filterCompany) return false;
       if (filterPersonnel !== 'ALL' && p.id !== filterPersonnel) return false;
       return true;
     });
-  }, [schedules, personnel, filterGroup, filterPersonnel]);
+  }, [schedules, personnel, filterGroup, filterPersonnel, filterCompany]);
 
   const uniqueGroups = useMemo(() => [...new Set(personnel.map(p => p.rosterGroup))].sort(), [personnel]);
+  const uniqueCompanies = useMemo(() => [...new Set(personnel.map(p => p.company).filter(Boolean))].sort(), [personnel]);
 
   const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<ScheduleFormData>({
     resolver: zodResolver(scheduleSchema),
@@ -1866,7 +1871,7 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
           </select>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="relative">
             <Users className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--theme-text-muted)]" size={14} />
             <select 
@@ -1877,6 +1882,23 @@ export function CrewCalendar({ isGuest }: CrewCalendarProps) {
               <option value="ALL">All Groups</option>
               {uniqueGroups.map(g => (
                 <option key={g} value={g}>{g}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="relative">
+            <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--theme-text-muted)]" size={14} />
+            <select 
+              value={filterCompany}
+              onChange={(e) => {
+                setFilterCompany(e.target.value);
+                setFilterPersonnel('ALL');
+              }}
+              className="bg-[var(--theme-container)] border border-[var(--theme-border)] rounded-xl pl-10 pr-8 py-2 text-[10px] font-black text-[var(--theme-text)] uppercase tracking-widest focus:outline-none focus:border-blue-500 appearance-none min-w-[130px]"
+            >
+              <option value="ALL">All Companies</option>
+              {uniqueCompanies.map(c => (
+                <option key={c} value={c}>{c}</option>
               ))}
             </select>
           </div>

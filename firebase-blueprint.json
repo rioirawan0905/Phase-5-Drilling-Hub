@@ -9,6 +9,7 @@
         "title": { "type": "string" },
         "email": { "type": "string" },
         "rosterGroup": { "type": "string" },
+        "company": { "type": "string" },
         "lat": { "type": "number" },
         "lng": { "type": "number" },
         "lastLocationUpdate": { "type": "object" }

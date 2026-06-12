@@ -79,17 +79,20 @@ export function Dashboard({ isGuest }: DashboardProps) {
   const [selectedPeriods, setSelectedPeriods] = useState<string[]>([]); // YYYY-MM
   const [selectedGroup, setSelectedGroup] = useState<string>('ALL');
   const [selectedPersonnel, setSelectedPersonnel] = useState<string>('ALL');
+  const [selectedCompany, setSelectedCompany] = useState<string>('ALL');
   const [isPeriodMenuOpen, setIsPeriodMenuOpen] = useState(false);
   
   // Summary Table Filters
   const [summaryGroup, setSummaryGroup] = useState<string>('ALL');
   const [summaryPersonnel, setSummaryPersonnel] = useState<string>('ALL');
+  const [summaryCompany, setSummaryCompany] = useState<string>('ALL');
   const [summaryMonth, setSummaryMonth] = useState<string>('ALL');
   const [summaryStatus, setSummaryStatus] = useState<string>('ALL');
   const [summaryTab, setSummaryTab] = useState<'Active' | 'Completed'>('Active');
   const [laborProfileTab, setLaborProfileTab] = useState<'individual' | 'monthly' | 'work-hours'>('individual');
 
   const uniqueGroups = useMemo(() => [...new Set(personnel.map(p => p.rosterGroup).filter(Boolean))].sort(), [personnel]);
+  const uniqueCompanies = useMemo(() => [...new Set(personnel.map(p => p.company).filter(Boolean))].sort(), [personnel]);
   const availableMonths = useMemo(() => {
     const months = new Set<string>();
     schedules.forEach(s => {
@@ -361,7 +364,8 @@ export function Dashboard({ isGuest }: DashboardProps) {
     const filteredPersonnel = personnel.filter(p => {
       const matchesGroup = selectedGroup === 'ALL' || p.rosterGroup === selectedGroup;
       const matchesPerson = selectedPersonnel === 'ALL' || p.id === selectedPersonnel;
-      return matchesGroup && matchesPerson;
+      const matchesCompany = selectedCompany === 'ALL' || p.company === selectedCompany;
+      return matchesGroup && matchesPerson && matchesCompany;
     });
 
     const filteredPersonnelIds = new Set(filteredPersonnel.map(p => p.id));
@@ -512,7 +516,7 @@ export function Dashboard({ isGuest }: DashboardProps) {
       .sort((a, b) => b.hours - a.hours);
 
     return { totalHours: totalHoursCount, chartData, mtdHours: mtdHoursCount, ytdHours: ytdHoursCount, monthlyTrends };
-  }, [schedules, personnel, selectedPersonnel, selectedGroup, selectedPeriods]);
+  }, [schedules, personnel, selectedPersonnel, selectedGroup, selectedCompany, selectedPeriods]);
 
   const [summarySort, setSummarySort] = useState<{ key: string, direction: 'asc' | 'desc' }>({ key: 'date', direction: 'asc' });
 
@@ -522,6 +526,7 @@ export function Dashboard({ isGuest }: DashboardProps) {
       if (!p) return false;
       
       if (summaryGroup !== 'ALL' && p.rosterGroup !== summaryGroup) return false;
+      if (summaryCompany !== 'ALL' && p.company !== summaryCompany) return false;
       if (summaryPersonnel !== 'ALL' && p.id !== summaryPersonnel) return false;
       if (summaryMonth !== 'ALL') {
         const d1 = f.requestedDateDZtoID?.substring(0, 7);
@@ -569,7 +574,7 @@ export function Dashboard({ isGuest }: DashboardProps) {
     });
 
     return result;
-  }, [allFlights, personnel, summaryGroup, summaryPersonnel, summaryMonth, summaryStatus, summarySort, summaryTab]);
+  }, [allFlights, personnel, summaryGroup, summaryPersonnel, summaryCompany, summaryMonth, summaryStatus, summarySort, summaryTab]);
 
   const flightPerformanceData = useMemo(() => {
     const data = [];
@@ -1003,6 +1008,9 @@ export function Dashboard({ isGuest }: DashboardProps) {
           <div className="w-full">
             <PersonnelMap 
               onDutyPersonnel={personnel.filter(p => {
+                 const matchesGroup = selectedGroup === 'ALL' || p.rosterGroup === selectedGroup;
+                 const matchesCompany = selectedCompany === 'ALL' || p.company === selectedCompany;
+                 if (!matchesGroup || !matchesCompany) return false;
                  const now = new Date();
                  now.setHours(0,0,0,0);
                  return schedules.some(s => {
@@ -1395,6 +1403,23 @@ export function Dashboard({ isGuest }: DashboardProps) {
                   </select>
                 </div>
 
+                {/* Company Filter */}
+                <div className="relative flex items-center justify-center w-10 h-10 md:w-auto md:h-auto md:px-4 py-2 bg-[var(--theme-status)] border border-[var(--theme-border)] rounded-xl group/filter hover:bg-[var(--theme-card)] hover:shadow-lg transition-all shadow-sm flex-none">
+                  <span className="hidden md:block text-[9px] md:text-[10px] font-black text-[var(--theme-text-muted)] uppercase tracking-widest mr-2">Company:</span>
+                  <Briefcase size={12} className="md:hidden text-[var(--theme-text-muted)]" />
+                  <select 
+                    value={selectedCompany} 
+                    onChange={(e) => {
+                      setSelectedCompany(e.target.value);
+                      setSelectedPersonnel('ALL');
+                    }}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer md:relative md:opacity-100 md:bg-transparent md:text-[10px] md:text-[11px] md:font-black md:text-[var(--theme-text)] md:focus:outline-none md:uppercase md:w-auto select-none"
+                  >
+                    <option value="ALL">All Companies</option>
+                    {uniqueCompanies.map(c => <option key={c} value={c} className="bg-white">{c}</option>)}
+                  </select>
+                </div>
+
                 {/* Personnel Selector */}
                 <div className="relative flex items-center justify-center w-10 h-10 md:w-auto md:h-auto md:px-4 py-2 bg-[var(--theme-status)] border border-[var(--theme-border)] rounded-xl group/filter hover:bg-[var(--theme-card)] hover:shadow-lg transition-all shadow-sm flex-none">
                   <span className="hidden md:block text-[9px] md:text-[10px] font-black text-[var(--theme-text-muted)] uppercase tracking-widest mr-2">Personnel:</span>
@@ -1406,7 +1431,11 @@ export function Dashboard({ isGuest }: DashboardProps) {
                   >
                     <option value="ALL">All Personnel</option>
                     {personnel
-                      .filter(p => selectedGroup === 'ALL' || p.rosterGroup === selectedGroup)
+                      .filter(p => {
+                        const matchesGroup = selectedGroup === 'ALL' || p.rosterGroup === selectedGroup;
+                        const matchesCompany = selectedCompany === 'ALL' || p.company === selectedCompany;
+                        return matchesGroup && matchesCompany;
+                      })
                       .map(p => <option key={p.id} value={p.id} className="bg-white">{p.fullName}</option>)
                     }
                   </select>
@@ -2143,7 +2172,10 @@ export function Dashboard({ isGuest }: DashboardProps) {
                 <Users size={12} className="text-[var(--theme-text-muted)]" />
                 <select 
                   value={summaryGroup} 
-                  onChange={(e) => setSummaryGroup(e.target.value)}
+                  onChange={(e) => {
+                    setSummaryGroup(e.target.value);
+                    setSummaryPersonnel('ALL');
+                  }}
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer md:relative md:opacity-100 md:bg-transparent md:text-[var(--theme-text)] md:focus:outline-none md:uppercase md:font-black md:tracking-tight md:ml-2 md:w-auto"
                 >
                   <option value="ALL">All Groups</option>
@@ -2153,6 +2185,22 @@ export function Dashboard({ isGuest }: DashboardProps) {
              </div>
 
              <div className="relative flex items-center justify-center w-10 md:w-auto md:h-auto md:px-4 py-2 bg-[var(--theme-card)] border border-[var(--theme-border)] rounded-xl text-[10px] shadow-sm flex-none">
+                <Briefcase size={12} className="text-[var(--theme-text-muted)]" />
+                <select 
+                  value={summaryCompany} 
+                  onChange={(e) => {
+                    setSummaryCompany(e.target.value);
+                    setSummaryPersonnel('ALL');
+                  }}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer md:relative md:opacity-100 md:bg-transparent md:text-[var(--theme-text)] md:focus:outline-none md:uppercase md:font-black md:tracking-tight md:ml-2 md:w-auto"
+                >
+                  <option value="ALL">All Companies</option>
+                  {uniqueCompanies.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <span className="hidden md:block ml-2 text-[var(--theme-text)] font-black uppercase tracking-tight">{summaryCompany === 'ALL' ? 'Companies' : summaryCompany}</span>
+              </div>
+
+             <div className="relative flex items-center justify-center w-10 md:w-auto md:h-auto md:px-4 py-2 bg-[var(--theme-card)] border border-[var(--theme-border)] rounded-xl text-[10px] shadow-sm flex-none">
                 <Users size={12} className="text-[var(--theme-text-muted)]" />
                 <select 
                   value={summaryPersonnel} 
@@ -2160,7 +2208,14 @@ export function Dashboard({ isGuest }: DashboardProps) {
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer md:relative md:opacity-100 md:bg-transparent md:text-[var(--theme-text)] md:focus:outline-none md:uppercase md:font-black md:tracking-tight md:ml-2 md:w-auto"
                 >
                   <option value="ALL">All Staff</option>
-                  {personnel.sort((a,b) => a.fullName.localeCompare(b.fullName)).map(p => <option key={p.id} value={p.id}>{p.fullName}</option>)}
+                  {personnel
+                    .filter(p => {
+                      const matchesGroup = summaryGroup === 'ALL' || p.rosterGroup === summaryGroup;
+                      const matchesCompany = summaryCompany === 'ALL' || p.company === summaryCompany;
+                      return matchesGroup && matchesCompany;
+                    })
+                    .sort((a,b) => a.fullName.localeCompare(b.fullName))
+                    .map(p => <option key={p.id} value={p.id}>{p.fullName}</option>)}
                 </select>
                 <span className="hidden md:block ml-2 text-[var(--theme-text)] font-black uppercase tracking-tight">{summaryPersonnel === 'ALL' ? 'Staff' : personnel.find(p => p.id === summaryPersonnel)?.fullName.split(' ')[0]}</span>
              </div>

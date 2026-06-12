@@ -4,6 +4,7 @@ export interface Personnel {
   title: string;
   email: string;
   rosterGroup: string;
+  company?: string;
   employeeId?: string;
   phone?: string;
   lat?: number;

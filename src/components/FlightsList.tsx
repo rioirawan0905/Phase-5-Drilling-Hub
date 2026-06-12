@@ -53,6 +53,7 @@ export function FlightsList({ isGuest }: FlightsListProps) {
   const [filterYear, setFilterYear] = useState<string>(new Date().getFullYear().toString());
   const [filterGroup, setFilterGroup] = useState<string>('ALL');
   const [filterPersonnel, setFilterPersonnel] = useState<string>('ALL');
+  const [filterCompany, setFilterCompany] = useState<string>('ALL');
 
   const { register: regRequest, handleSubmit: handleReqSubmit, reset: resetReq, setValue: setReqValue, watch: watchReq, formState: { errors: reqErrors } } = useForm<FlightRequestFormData>({
     resolver: zodResolver(flightRequestSchema),
@@ -241,6 +242,9 @@ export function FlightsList({ isGuest }: FlightsListProps) {
       
       // Group filter
       if (filterGroup !== 'ALL' && person?.rosterGroup !== filterGroup) return false;
+
+      // Company filter
+      if (filterCompany !== 'ALL' && person?.company !== filterCompany) return false;
       
       // Year filter (checking duty period and flight dates)
       const flightDates = [f.startDate, f.endDate, f.requestedDateDZtoID, f.requestedDateIDtoDZ].filter(Boolean) as string[];
@@ -310,11 +314,16 @@ export function FlightsList({ isGuest }: FlightsListProps) {
     });
 
     return result;
-  }, [flights, personnel, filterMonth, filterYear, filterGroup, filterPersonnel, activeTab, sortConfig]);
+  }, [flights, personnel, filterMonth, filterYear, filterGroup, filterPersonnel, filterCompany, activeTab, sortConfig]);
 
   const uniqueGroups = useMemo(() => {
     const groups = new Set(personnel.map(p => p.rosterGroup).filter(Boolean));
     return Array.from(groups).sort();
+  }, [personnel]);
+
+  const uniqueCompanies = useMemo(() => {
+    const companies = new Set(personnel.map(p => p.company).filter(Boolean));
+    return Array.from(companies).sort();
   }, [personnel]);
 
   return (
@@ -407,12 +416,32 @@ export function FlightsList({ isGuest }: FlightsListProps) {
             <label className="text-[8px] text-[var(--theme-text-muted)] uppercase font-bold px-1">Group</label>
             <select 
               value={filterGroup}
-              onChange={(e) => setFilterGroup(e.target.value)}
+              onChange={(e) => {
+                setFilterGroup(e.target.value);
+                setFilterPersonnel('ALL');
+              }}
               className="w-full bg-[var(--theme-status)] border border-[var(--theme-border)] px-2 md:px-3 py-1.5 text-[9px] md:text-[10px] text-[var(--theme-text)] rounded-lg focus:outline-none"
             >
               <option value="ALL">ALL GROUPS</option>
               {uniqueGroups.map(g => (
                 <option key={g} value={g}>GROUP {g}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[8px] text-[var(--theme-text-muted)] uppercase font-bold px-1">Company</label>
+            <select 
+              value={filterCompany}
+              onChange={(e) => {
+                setFilterCompany(e.target.value);
+                setFilterPersonnel('ALL');
+              }}
+              className="w-full bg-[var(--theme-status)] border border-[var(--theme-border)] px-2 md:px-3 py-1.5 text-[9px] md:text-[10px] text-[var(--theme-text)] rounded-lg focus:outline-none"
+            >
+              <option value="ALL">ALL COMPANIES</option>
+              {uniqueCompanies.map(c => (
+                <option key={c} value={c}>{c}</option>
               ))}
             </select>
           </div>
@@ -425,9 +454,16 @@ export function FlightsList({ isGuest }: FlightsListProps) {
               className="w-full bg-[var(--theme-status)] border border-[var(--theme-border)] px-2 md:px-3 py-1.5 text-[9px] md:text-[10px] text-[var(--theme-text)] rounded-lg focus:outline-none"
             >
               <option value="ALL">ALL PERSONNEL</option>
-              {personnel.sort((a,b) => a.fullName.localeCompare(b.fullName)).map(p => (
-                <option key={p.id} value={p.id}>{p.fullName}</option>
-              ))}
+              {personnel
+                .filter(p => {
+                  if (filterGroup !== 'ALL' && p.rosterGroup !== filterGroup) return false;
+                  if (filterCompany !== 'ALL' && p.company !== filterCompany) return false;
+                  return true;
+                })
+                .sort((a,b) => a.fullName.localeCompare(b.fullName))
+                .map(p => (
+                  <option key={p.id} value={p.id}>{p.fullName}</option>
+                ))}
             </select>
           </div>
         </div>
